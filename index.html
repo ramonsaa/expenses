@@ -361,7 +361,7 @@
                     </div>
                     <div class="text-right">
                         <p class="text-sm uppercase tracking-wide text-gray-500 mb-1">Payment</p>
-                        <p class="font-bold text-lg text-black uppercase" id="report-payment">USA</p>
+                        <p class="font-bold text-lg text-black uppercase" id="report-payment">FLEXOWASH LLC</p>
                         <p class="text-xs text-gray-400 mt-1" id="report-date">--/--/--</p>
                     </div>
                 </div>
@@ -464,8 +464,8 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700">Payment Entity</label>
                     <select id="new-trip-payment" class="w-full mt-1 p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none">
-                        <option value="USA">USA</option>
-                        <option value="Denmark">Denmark</option>
+                        <option value="FLEXOWASH LLC">FLEXOWASH LLC</option>
+                        <option value="FLEXOWASH APS">FLEXOWASH APS</option>
                         <option value="Customer">Customer</option>
                     </select>
                 </div>
@@ -731,8 +731,8 @@
                 }
                 
                 const paymentTag = document.getElementById('detail-trip-payment');
-                paymentTag.innerText = trip.payment || "USA";
-                paymentTag.className = trip.payment === 'Denmark' ? "bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs font-bold uppercase" : 
+                paymentTag.innerText = trip.payment || "FLEXOWASH LLC";
+                paymentTag.className = trip.payment === 'FLEXOWASH APS' ? "bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs font-bold uppercase" : 
                                        trip.payment === 'Customer' ? "bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-bold uppercase" : 
                                        "bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-bold uppercase";
 
@@ -902,11 +902,14 @@
                     rate = parseFloat(document.getElementById('exchange-rate').value);
                     finalUSD = amount / rate;
                 }
+                
+                // Lógica Otros
                 let concept = document.getElementById('expense-concept').value;
                 if (concept === 'Otros') {
                     const desc = document.getElementById('expense-other-desc').value.trim();
                     if (desc) concept = `Otros: ${desc}`;
                 }
+
                 const expenseData = {
                     tripId: state.currentTrip.id,
                     userId: state.user.uid,
@@ -993,7 +996,7 @@
                 if(state.currentTrip.isSingle) document.getElementById('report-single-badge').classList.remove('hidden');
                 else document.getElementById('report-single-badge').classList.add('hidden');
 
-                const paymentType = state.currentTrip.payment || "USA";
+                const paymentType = state.currentTrip.payment || "FLEXOWASH LLC";
                 document.getElementById('report-payment').innerText = paymentType;
                 
                 const tbody = document.getElementById('report-table-body');
@@ -1046,9 +1049,9 @@
                 if(trips.length === 0) activeContainer.innerHTML = `<div class="col-span-full text-center text-gray-500 mt-10">No hay viajes registrados.<br>¡Crea uno nuevo!</div>`;
                 let hasArchived = false;
                 trips.forEach((data) => {
-                    const payment = data.payment || 'USA';
+                    const payment = data.payment || 'FLEXOWASH LLC';
                     let badgeClass = "bg-blue-100 text-blue-800";
-                    if(payment === 'Denmark') badgeClass = "bg-red-100 text-red-800";
+                    if(payment === 'FLEXOWASH APS') badgeClass = "bg-red-100 text-red-800";
                     if(payment === 'Customer') badgeClass = "bg-green-100 text-green-800";
                     const total = state.tripTotals[data.id] || 0;
                     
