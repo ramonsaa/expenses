@@ -1348,11 +1348,10 @@
                 onSnapshot(qExpenses, s => {
                     state.tripTotals = {};
                     s.forEach(d => {
-                        const expense = doc.data(); // Error here in minified, fixed now
-                        const e = d.data();
-                        const tripId = e.tripId;
+                        const expense = d.data(); // CORRECTO: USAR d.data()
+                        const tripId = expense.tripId;
                         if (!state.tripTotals[tripId]) state.tripTotals[tripId] = 0;
-                        state.tripTotals[tripId] += (e.finalUSD || 0);
+                        state.tripTotals[tripId] += (expense.finalUSD || 0);
                     });
                     app.renderDashboard();
                 });
