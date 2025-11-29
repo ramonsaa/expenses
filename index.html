@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestor de Viáticos Pro v2.4</title>
+    <title>Gestor de Viáticos v1.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dropbox.js/10.34.0/Dropbox-sdk.min.js"></script>
@@ -12,7 +12,6 @@
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
         .hide { display: none !important; }
-        
         .loader {
             border: 4px solid #f3f3f3;
             border-top: 4px solid #3b82f6;
@@ -37,22 +36,14 @@
         }
 
         #debug-bar {
-            background-color: #e0e7ff; 
-            border-bottom: 1px solid #a5b4fc;
-            color: #3730a3;
+            background-color: #dcfce7;
+            border-bottom: 1px solid #86efac;
+            color: #166534;
             font-size: 0.75rem;
             padding: 4px 8px;
             text-align: center;
             font-family: monospace;
         }
-        
-        #localhost-warning, #global-error {
-            padding: 10px;
-            text-align: center;
-            font-size: 0.8rem;
-        }
-        #localhost-warning { background-color: #fee2e2; border-bottom: 1px solid #fca5a5; color: #991b1b; }
-        #global-error { background-color: #7f1d1d; color: white; font-weight: bold; display: none; }
 
         @media print {
             @page { margin: 0; size: auto; }
@@ -64,291 +55,988 @@
                 background: white !important; z-index: 9999;
             }
             .no-print { display: none !important; }
-            #debug-bar, nav, #localhost-warning, #full-screen-loader { display: none !important; }
+            #debug-bar, nav, #protocol-warning, #full-screen-loader { display: none !important; }
         }
     </style>
 </head>
 <body class="text-gray-800 h-screen flex flex-col overflow-hidden">
 
-    <div id="global-error" class="no-print"></div>
-
-    <div id="localhost-warning" class="hidden no-print">
-        ⚠️ <b>NOTA:</b> Si usas el archivo local, la sesión se cierra al volver de Dropbox. Solo inicia sesión de nuevo y la conexión ya estará lista.
-    </div>
-
+    <!-- Barra de Estado -->
     <div id="debug-bar" class="flex justify-between items-center no-print">
-        <span data-i18n="secure_system">🔒 SISTEMA SEGURO v2.4</span>
-        <span id="connection-status" data-i18n="waiting_login">Cargando...</span>
+        <span>🔒 SISTEMA SEGURO v1.0 (Estable)</span>
+        <span id="connection-status">Esperando Login...</span>
     </div>
-    
+
     <!-- PANTALLA DE LOGIN -->
     <div id="login-screen" class="fixed inset-0 bg-gray-900 z-[200] flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center relative">
-            <!-- Mensaje especial si venimos de Dropbox -->
-            <div id="dropbox-return-msg" class="hidden absolute top-0 left-0 w-full bg-green-100 text-green-800 text-xs p-2 rounded-t-2xl font-bold">
-                ✅ Dropbox conectado correctamente. Por favor entra de nuevo.
-            </div>
-
-            <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-6 mt-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
+            <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-6">
                 <i class="fa-solid fa-shield-cat text-green-600 text-3xl"></i>
             </div>
-            <h2 class="text-2xl font-bold text-gray-900 mb-2" data-i18n="access_title">Acceso Viáticos</h2>
-            <p class="text-gray-500 mb-6 text-sm" data-i18n="access_desc">Ingresa tu usuario para acceder.</p>
+            <h2 class="text-2xl font-bold text-gray-900 mb-2">Acceso Viáticos</h2>
+            <p class="text-gray-500 mb-6 text-sm">Ingresa tu usuario para acceder a tus viajes.</p>
             
             <form onsubmit="app.handleLogin(event)" class="space-y-4 text-left">
                 <div>
-                    <label class="block text-xs font-bold text-gray-700 uppercase mb-1" data-i18n="user_label">Usuario</label>
+                    <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Usuario</label>
                     <input type="text" id="login-username" required placeholder="Ej. JuanPerez" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none uppercase" style="text-transform: uppercase;">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-gray-700 uppercase mb-1" data-i18n="password_label">Contraseña</label>
+                    <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Contraseña</label>
                     <input type="password" id="login-pass" required placeholder="******" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none">
                 </div>
-                <button type="submit" id="btn-login-submit" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition shadow-lg" data-i18n="login_btn">Entrar</button>
+                <button type="submit" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition shadow-lg">
+                    Entrar
+                </button>
             </form>
         </div>
     </div>
-    
-    <!-- UI COMPONENTS -->
+
+    <!-- Overlay de Carga -->
     <div id="full-screen-loader" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[100] flex flex-col items-center justify-center text-white no-print">
         <div class="loader mb-4"></div>
         <p id="loader-text" class="text-lg font-bold">Procesando...</p>
     </div>
 
-    <div id="custom-modal-confirm" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[150] flex items-center justify-center p-4 no-print"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 animate-fade-in-up"><h3 class="text-lg font-bold text-gray-900 mb-2" id="confirm-title">Confirmar</h3><p class="text-sm text-gray-600 mb-6" id="confirm-message">¿Seguro?</p><div class="flex justify-end gap-3"><button onclick="app.hideConfirm()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg" data-i18n="cancel">Cancelar</button><button id="btn-confirm-action" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold" data-i18n="yes">Sí</button></div></div></div>
-    <div id="custom-modal-alert" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[160] flex items-center justify-center p-4 no-print"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 text-center"><h3 class="text-lg font-bold text-gray-900" id="alert-title">Aviso</h3><p class="text-sm text-gray-500 mt-2 mb-4" id="alert-message">...</p><button onclick="document.getElementById('custom-modal-alert').classList.add('hidden')" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold" data-i18n="understood">OK</button></div></div>
+    <!-- MODALES UI -->
+    <div id="custom-modal-confirm" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[150] flex items-center justify-center p-4 no-print">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 animate-fade-in-up">
+            <h3 class="text-lg font-bold text-gray-900 mb-2" id="confirm-title">Confirmar</h3>
+            <p class="text-sm text-gray-600 mb-6" id="confirm-message">¿Estás seguro?</p>
+            <div class="flex justify-end gap-3">
+                <button onclick="app.hideConfirm()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button>
+                <button id="btn-confirm-action" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold">Sí</button>
+            </div>
+        </div>
+    </div>
 
+    <div id="custom-modal-alert" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[160] flex items-center justify-center p-4 no-print">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
+                <i class="fa-solid fa-info text-blue-600 text-xl"></i>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900" id="alert-title">Aviso</h3>
+            <p class="text-sm text-gray-500 mt-2 mb-4" id="alert-message">Mensaje...</p>
+            <button onclick="document.getElementById('custom-modal-alert').classList.add('hidden')" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold">Entendido</button>
+        </div>
+    </div>
+
+    <!-- Navegación -->
     <nav class="bg-white shadow-md p-4 flex justify-between items-center z-10 no-print">
-        <div class="flex items-center gap-2"><i class="fa-solid fa-plane-circle-check text-green-600 text-xl"></i><h1 class="font-bold text-lg text-gray-700 tracking-tight">Viáticos <span class="bg-clip-text text-transparent bg-gradient-to-r from-green-500 to-emerald-700 font-extrabold">Pro</span></h1></div>
+        <div class="flex items-center gap-2">
+            <i class="fa-solid fa-plane-circle-check text-green-600 text-xl"></i>
+            <h1 class="font-bold text-lg text-gray-700 tracking-tight">Viáticos <span class="bg-clip-text text-transparent bg-gradient-to-r from-green-500 to-emerald-700 font-extrabold">Pro</span></h1>
+        </div>
         <div class="flex gap-3 items-center">
             <span id="user-email-display" class="text-xs text-gray-500 font-bold hidden md:block"></span>
-            <button onclick="app.toggleLanguage()" class="text-blue-600 hover:text-blue-800 text-xs font-bold border border-blue-200 px-2 py-1 rounded flex items-center gap-1"><i class="fa-solid fa-language"></i> <span id="lang-display">EN</span></button>
-            <button onclick="app.logout()" class="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-2 py-1 rounded" data-i18n="logout">Salir</button>
-            <button onclick="app.showSettings()" class="text-gray-500 hover:text-blue-600 transition ml-2"><i class="fa-solid fa-gear text-xl"></i></button>
+            <button onclick="app.logout()" class="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-2 py-1 rounded">Salir</button>
+            <button onclick="app.showSettings()" class="text-gray-500 hover:text-blue-600 transition ml-2">
+                <i class="fa-solid fa-gear text-xl"></i>
+            </button>
         </div>
     </nav>
 
     <main id="main-container" class="flex-1 overflow-y-auto p-4 pb-24 relative">
+        
+        <!-- VISTA 1: Dashboard -->
         <div id="view-dashboard" class="view-section animate-fade-in pb-20">
-            <div class="flex justify-between items-end mb-4"><div><h2 class="text-2xl font-bold text-gray-800" data-i18n="active_trips">Viajes Activos</h2><p class="text-sm text-gray-500" data-i18n="active_trips_desc">En curso</p></div><button onclick="app.showNewTripModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 active:scale-95 transition flex items-center gap-2"><i class="fa-solid fa-plus"></i> <span data-i18n="new_btn">Nuevo</span></button></div>
-            <div id="trips-list" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-8"><div class="text-center p-10 text-gray-400 col-span-full"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i><br><span data-i18n="loading">Cargando...</span></div></div>
-            <div class="border-t border-gray-200 pt-6"><div class="flex items-center gap-2 mb-4"><i class="fa-solid fa-box-archive text-gray-400"></i><h2 class="text-lg font-bold text-gray-600" data-i18n="closed_history">Historial</h2></div><div id="archived-trips-list" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3 opacity-80"></div>
-            <div class="mt-6 bg-gray-50 p-4 rounded-lg border border-gray-200"><h3 class="text-xs font-bold text-gray-500 uppercase mb-2" data-i18n="search_title">Buscar</h3><div class="flex gap-2"><div class="relative flex-1"><span class="absolute left-3 top-2 text-gray-400 font-bold text-sm">EXP-</span><input type="number" id="search-trip-id" placeholder="000000" class="w-full p-2 pl-12 border rounded bg-white text-sm font-mono focus:ring-1 focus:ring-blue-500 outline-none"></div><button onclick="app.searchArchivedTrip()" class="bg-gray-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-gray-700" data-i18n="search_btn">Buscar</button></div></div></div>
+            <div class="flex justify-between items-end mb-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800">Viajes Activos</h2>
+                    <p class="text-sm text-gray-500">Tus gastos en curso</p>
+                </div>
+                <button onclick="app.showNewTripModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 active:scale-95 transition flex items-center gap-2">
+                    <i class="fa-solid fa-plus"></i> Nuevo
+                </button>
+            </div>
+
+            <div id="trips-list" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-8">
+                <div class="text-center p-10 text-gray-400 col-span-full">
+                    <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i><br>Cargando datos...
+                </div>
+            </div>
+
+            <!-- Historial Cerrado -->
+            <div class="border-t border-gray-200 pt-6">
+                <div class="flex items-center gap-2 mb-4">
+                    <i class="fa-solid fa-box-archive text-gray-400"></i>
+                    <h2 class="text-lg font-bold text-gray-600">Historial Cerrado</h2>
+                </div>
+                
+                <div id="archived-trips-list" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3 opacity-80">
+                    <div class="text-sm text-gray-400 italic col-span-full">No hay viajes cerrados recientes.</div>
+                </div>
+
+                <!-- Buscador -->
+                <div class="mt-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase mb-2">Buscar viaje por número</h3>
+                    <div class="flex gap-2">
+                        <div class="relative flex-1">
+                            <span class="absolute left-3 top-2 text-gray-400 font-bold text-sm">EXP-</span>
+                            <input type="number" id="search-trip-id" placeholder="000000" class="w-full p-2 pl-12 border rounded bg-white text-sm font-mono focus:ring-1 focus:ring-blue-500 outline-none">
+                        </div>
+                        <button onclick="app.searchArchivedTrip()" class="bg-gray-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-gray-700">
+                            Buscar
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
+        <!-- VISTA 2: Detalles del Viaje -->
         <div id="view-trip-details" class="view-section hide">
             <div class="flex items-center gap-2 mb-4">
-                <button onclick="app.loadDashboard()" class="text-gray-500 hover:text-blue-600"><i class="fa-solid fa-arrow-left text-xl"></i></button>
-                <div><h2 id="detail-client-name" class="text-xl font-bold truncate leading-tight">Cliente</h2><span id="detail-trip-code" class="text-xs font-mono bg-gray-200 text-gray-700 px-1 rounded">EXP-000000</span><span id="detail-trip-type-badge" class="hidden ml-2 text-xs bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded border border-purple-200" data-i18n="badge_single">🛠️ Gasto Único</span></div>
-            </div>
-            <div class="bg-white p-4 rounded-xl shadow-sm mb-6 border border-gray-100 relative overflow-hidden">
-                <div class="flex justify-between text-sm text-gray-500 mb-2"><span id="detail-trip-date">--/--/--</span><span id="detail-trip-payment" class="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded text-xs font-bold uppercase">PAYMENT</span></div>
-                <div class="bg-blue-50 border border-blue-100 p-3 rounded-lg mt-2"><p class="text-xs text-gray-500 uppercase font-bold" data-i18n="est_total_card">Total Estimado</p><p class="text-2xl font-bold text-blue-800" id="header-total-usd">$0.00 USD</p></div>
-                <div class="grid grid-cols-2 gap-2 mt-3">
-                    <button onclick="app.generateReport()" class="bg-indigo-50 text-indigo-600 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition border border-indigo-100"><i class="fa-solid fa-file-invoice mr-2"></i> <span data-i18n="report_btn">Reporte</span></button>
-                    <button id="btn-close-trip" onclick="app.promptArchiveTrip()" class="bg-red-50 text-red-600 py-2 rounded-lg text-sm font-semibold hover:bg-red-100 transition border border-red-100"><i class="fa-solid fa-box-archive mr-2"></i> <span data-i18n="close_trip_btn">Cerrar</span></button>
+                <button onclick="app.loadDashboard()" class="text-gray-500 hover:text-blue-600">
+                    <i class="fa-solid fa-arrow-left text-xl"></i>
+                </button>
+                <div>
+                    <h2 id="detail-client-name" class="text-xl font-bold truncate leading-tight">Cliente</h2>
+                    <span id="detail-trip-code" class="text-xs font-mono bg-gray-200 text-gray-700 px-1 rounded">EXP-000000</span>
+                    <span id="detail-trip-type-badge" class="hidden ml-2 text-xs bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded border border-purple-200">🛠️ Gasto Único</span>
                 </div>
-                <div id="archived-banner" class="hidden absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-6 py-1 transform rotate-45 translate-x-4 translate-y-2 shadow-sm" data-i18n="closed_banner">CERRADO</div>
             </div>
-            <h3 class="font-bold text-gray-700 mb-3" data-i18n="expenses_title">Gastos</h3>
+
+            <div class="bg-white p-4 rounded-xl shadow-sm mb-6 border border-gray-100 relative overflow-hidden">
+                <div class="flex justify-between text-sm text-gray-500 mb-2">
+                    <span id="detail-trip-date"><i class="fa-regular fa-calendar mr-1"></i> --/--/--</span>
+                    <span id="detail-trip-payment" class="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded text-xs font-bold uppercase">PAYMENT</span>
+                </div>
+                
+                <div class="bg-blue-50 border border-blue-100 p-3 rounded-lg mt-2">
+                    <p class="text-xs text-gray-500 uppercase font-bold">Total Estimado (Tarjeta USD)</p>
+                    <p class="text-2xl font-bold text-blue-800" id="header-total-usd">$0.00 USD</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 mt-3">
+                    <button onclick="app.generateReport()" class="bg-indigo-50 text-indigo-600 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition border border-indigo-100">
+                        <i class="fa-solid fa-file-invoice mr-2"></i> Reporte
+                    </button>
+                    <button id="btn-close-trip" onclick="app.promptArchiveTrip()" class="bg-red-50 text-red-600 py-2 rounded-lg text-sm font-semibold hover:bg-red-100 transition border border-red-100">
+                        <i class="fa-solid fa-box-archive mr-2"></i> Cerrar Viaje
+                    </button>
+                </div>
+                
+                <div id="archived-banner" class="hidden absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-6 py-1 transform rotate-45 translate-x-4 translate-y-2 shadow-sm">
+                    CERRADO
+                </div>
+            </div>
+
+            <h3 class="font-bold text-gray-700 mb-3">Gastos Registrados</h3>
             <div id="expenses-list" class="space-y-3 pb-20"></div>
-            <button id="btn-add-floating" onclick="app.showAddExpense()" class="fixed bottom-6 right-6 bg-blue-600 text-white w-14 h-14 rounded-full shadow-xl flex items-center justify-center hover:bg-blue-700 active:scale-90 transition z-20"><i class="fa-solid fa-camera text-xl"></i></button>
+            
+            <button id="btn-add-floating" onclick="app.showAddExpense()" class="fixed bottom-6 right-6 bg-blue-600 text-white w-14 h-14 rounded-full shadow-xl flex items-center justify-center hover:bg-blue-700 active:scale-90 transition z-20">
+                <i class="fa-solid fa-camera text-xl"></i>
+            </button>
         </div>
 
+        <!-- VISTA 3: Formulario Nuevo Gasto -->
         <div id="view-add-expense" class="view-section hide">
-            <div class="flex items-center gap-2 mb-4"><button onclick="app.backToTrip()" class="text-gray-500 hover:text-blue-600"><i class="fa-solid fa-arrow-left text-xl"></i></button><h2 class="text-xl font-bold" data-i18n="add_expense_title">Registrar Gasto</h2></div>
+            <div class="flex items-center gap-2 mb-4">
+                <button onclick="app.backToTrip()" class="text-gray-500 hover:text-blue-600">
+                    <i class="fa-solid fa-arrow-left text-xl"></i>
+                </button>
+                <h2 class="text-xl font-bold">Registrar Gasto</h2>
+            </div>
+
             <form id="expense-form" onsubmit="app.saveExpense(event)" class="bg-white p-5 rounded-xl shadow-sm space-y-4">
                 <div class="mb-2">
-                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="ticket_label">Ticket / Recibo</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Ticket / Recibo</label>
                     <div class="relative border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:bg-gray-50 transition cursor-pointer" id="drop-area">
                         <input type="file" id="expense-photo" accept="image/*" capture="environment" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="app.handleFileSelect(this)">
-                        <div id="preview-container" class="flex flex-col items-center"><i class="fa-solid fa-camera text-3xl text-gray-400 mb-2"></i><p class="text-sm text-gray-500" data-i18n="tap_photo">Foto</p></div>
+                        <div id="preview-container" class="flex flex-col items-center">
+                            <i class="fa-solid fa-camera text-3xl text-gray-400 mb-2"></i>
+                            <p class="text-sm text-gray-500">Toca para tomar foto</p>
+                        </div>
                         <img id="image-preview" class="hidden max-h-48 mx-auto rounded shadow-sm mt-2 object-contain">
                     </div>
-                    <button type="button" id="btn-analyze-ticket" onclick="app.analyzeTicketWithGemini()" class="hidden w-full mt-2 ai-sparkle py-2 px-4 rounded-lg shadow-md flex items-center justify-center gap-2 font-bold text-sm transform transition hover:scale-105"><i class="fa-solid fa-wand-magic-sparkles"></i> <span data-i18n="ai_fill_btn">✨ IA</span></button>
-                    <p id="upload-status" class="text-xs text-center mt-1 text-blue-500 hidden" data-i18n="uploading">Subiendo...</p>
-                    <p id="ai-status" class="text-xs text-center mt-1 text-purple-600 font-bold hidden animate-pulse" data-i18n="ai_analyzing">Analizando...</p>
+                    
+                    <button type="button" id="btn-analyze-ticket" onclick="app.analyzeTicketWithGemini()" class="hidden w-full mt-2 ai-sparkle py-2 px-4 rounded-lg shadow-md flex items-center justify-center gap-2 font-bold text-sm transform transition hover:scale-105">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> ✨ Autocompletar con IA
+                    </button>
+                    
+                    <p id="upload-status" class="text-xs text-center mt-1 text-blue-500 hidden">Subiendo a Dropbox...</p>
+                    <p id="ai-status" class="text-xs text-center mt-1 text-purple-600 font-bold hidden animate-pulse">✨ Gemini analizando ticket...</p>
                 </div>
-                <div class="grid grid-cols-2 gap-3"><div><label class="block text-sm font-medium text-gray-700" data-i18n="date_label">Fecha</label><input type="date" id="expense-date" required class="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"></div><div><label class="block text-sm font-medium text-gray-700" data-i18n="time_label">Hora</label><input type="time" id="expense-time" required class="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"></div></div>
-                <div><label class="block text-sm font-medium text-gray-700" data-i18n="concept_label">Concepto</label>
-                <select id="expense-concept" required onchange="app.toggleOtherDesc()" class="w-full mt-1 p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none">
-                    <option value="Alimentos">🍔 Alimentos / Food</option><option value="Uber/Taxi">🚖 Uber/Taxi</option><option value="Boleto de avión">✈️ Boleto de avión / Flight</option><option value="Renta de carro">🚗 Renta de carro / Car Rental</option><option value="Gasolina">⛽ Gasolina / Gas</option><option value="Casetas">🛣️ Casetas / Tolls</option><option value="Hospedaje">🏨 Hospedaje / Lodging</option><option value="Transporte">🚕 Transporte / Transport</option><option value="Otros">📦 Otros / Others</option>
-                </select>
-                <input type="text" id="expense-other-desc" placeholder="Especifique..." class="hidden w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"></div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Fecha</label>
+                        <input type="date" id="expense-date" required class="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Hora</label>
+                        <input type="time" id="expense-time" required class="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Concepto</label>
+                    <select id="expense-concept" required onchange="app.toggleOtherDesc()" class="w-full mt-1 p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="Alimentos">🍔 Alimentos</option>
+                        <option value="Uber/Taxi">🚖 Uber/Taxi</option>
+                        <option value="Boleto de avión">✈️ Boleto de avión</option>
+                        <option value="Renta de carro">🚗 Renta de carro</option>
+                        <option value="Gasolina">⛽ Gasolina</option>
+                        <option value="Casetas">🛣️ Casetas</option>
+                        <option value="Hospedaje">🏨 Hospedaje</option>
+                        <option value="Transporte">🚕 Transporte</option>
+                        <option value="Otros">📦 Otros</option>
+                    </select>
+                    <input type="text" id="expense-other-desc" placeholder="Especifique..." class="hidden w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50">
+                </div>
+
                 <div class="grid grid-cols-3 gap-3">
-                    <div class="col-span-2"><label class="block text-sm font-medium text-gray-700" data-i18n="amount_label">Monto</label><input type="number" step="0.01" id="expense-amount" required placeholder="0.00" oninput="app.calculatePreview()" class="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-lg font-bold text-gray-700"></div>
-                    <div><label class="block text-sm font-medium text-gray-700" data-i18n="currency_label">Moneda</label><select id="expense-currency" onchange="app.toggleExchangeRate()" class="w-full mt-1 p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none font-semibold"><option value="MXN">MXN</option><option value="USD">USD</option></select></div>
+                    <div class="col-span-2">
+                        <label class="block text-sm font-medium text-gray-700">Cantidad Original</label>
+                        <input type="number" step="0.01" id="expense-amount" required placeholder="0.00" oninput="app.calculatePreview()" class="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-lg font-bold text-gray-700">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Moneda</label>
+                        <select id="expense-currency" onchange="app.toggleExchangeRate()" class="w-full mt-1 p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none font-semibold">
+                            <option value="MXN">MXN</option>
+                            <option value="USD">USD</option>
+                        </select>
+                    </div>
                 </div>
-                <div id="exchange-rate-container" class="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg"><div class="flex justify-between items-end mb-1"><label class="block text-xs font-bold text-orange-700 uppercase" data-i18n="rate_label">T. Cambio</label><span id="rate-status" class="text-[10px] text-orange-500"></span></div><div class="flex items-center gap-2"><span class="text-gray-500 text-sm">1 USD = $</span><input type="number" step="0.01" id="exchange-rate" value="20.50" oninput="app.calculatePreview()" class="w-24 p-2 border rounded text-right font-bold bg-white"><span class="text-gray-500 text-sm">MXN</span><button type="button" onclick="app.fetchExchangeRate()" class="text-blue-600 text-xs underline ml-auto"><i class="fa-solid fa-arrows-rotate"></i></button></div></div>
-                <div class="mt-4 text-right border-t pt-2"><p class="text-sm text-gray-500" data-i18n="est_card_charge">Cargo estimado:</p><p class="text-xl font-bold text-green-600" id="preview-usd">$0.00 USD</p></div>
-                <button type="submit" id="btn-save-expense" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold shadow-lg hover:bg-blue-700 transition mt-4 flex justify-center items-center gap-2"><span data-i18n="save_btn">Guardar</span></button>
+
+                <div id="exchange-rate-container" class="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                    <div class="flex justify-between items-end mb-1">
+                        <label class="block text-xs font-bold text-orange-700 uppercase">Tipo de Cambio (MXN a USD)</label>
+                        <span id="rate-status" class="text-[10px] text-orange-500"></span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-gray-500 text-sm">1 USD = $</span>
+                        <input type="number" step="0.01" id="exchange-rate" value="20.50" oninput="app.calculatePreview()" class="w-24 p-2 border rounded text-right font-bold bg-white">
+                        <span class="text-gray-500 text-sm">MXN</span>
+                        <button type="button" onclick="app.fetchExchangeRate()" class="text-blue-600 text-xs underline ml-auto">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mt-4 text-right border-t pt-2">
+                    <p class="text-sm text-gray-500">Cargo estimado en tarjeta:</p>
+                    <p class="text-xl font-bold text-green-600" id="preview-usd">$0.00 USD</p>
+                </div>
+
+                <button type="submit" id="btn-save-expense" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold shadow-lg hover:bg-blue-700 transition mt-4 flex justify-center items-center gap-2">
+                    <span>Guardar Gasto</span>
+                </button>
             </form>
         </div>
 
-        <!-- VISTA 4: Reporte -->
+        <!-- VISTA 4: Reporte Final -->
         <div id="view-report" class="view-section hide bg-white min-h-full absolute inset-0 z-30 p-6 overflow-y-auto">
-            <div class="no-print flex justify-between mb-6"><button onclick="app.backToTrip()" class="text-gray-600 flex items-center gap-2 hover:text-blue-600"><i class="fa-solid fa-arrow-left"></i> <span data-i18n="back">Regresar</span></button><div class="flex gap-2"><button onclick="app.getTripInsights()" class="ai-sparkle px-3 py-1 rounded shadow text-sm font-bold flex items-center gap-2 hover:opacity-90"><i class="fa-solid fa-brain"></i> <span data-i18n="ai_audit_btn">Auditoría</span></button><button onclick="app.printReport()" class="text-blue-600 font-bold flex items-center gap-2 border border-blue-600 px-3 py-1 rounded hover:bg-blue-50"><i class="fa-solid fa-print"></i> <span data-i18n="pdf_print_btn">PDF</span></button></div></div>
+            <div class="no-print flex justify-between mb-6">
+                <button onclick="app.backToTrip()" class="text-gray-600 flex items-center gap-2 hover:text-blue-600">
+                    <i class="fa-solid fa-arrow-left"></i> Regresar
+                </button>
+                <div class="flex gap-2">
+                     <button onclick="app.getTripInsights()" class="ai-sparkle px-3 py-1 rounded shadow text-sm font-bold flex items-center gap-2 hover:opacity-90">
+                        <i class="fa-solid fa-brain"></i> Auditoría IA
+                    </button>
+                    <button onclick="app.printReport()" class="text-blue-600 font-bold flex items-center gap-2 border border-blue-600 px-3 py-1 rounded hover:bg-blue-50">
+                        <i class="fa-solid fa-print"></i> PDF / Imprimir
+                    </button>
+                </div>
+            </div>
+
             <div id="report-section">
-                <div class="border-b-2 border-gray-800 pb-4 mb-6 flex justify-between items-start"><div><h1 class="text-3xl font-bold text-gray-900" data-i18n="report_title">Reporte</h1><p class="text-sm text-gray-500 mt-1" id="report-exp-code">EXP-000000</p></div><div class="text-right"><div id="report-watermark" class="hidden border-2 border-red-500 text-red-500 font-bold px-2 py-1 rounded transform -rotate-12 text-xs mb-2 inline-block" data-i18n="archived_mark">ARCHIVADO</div><div id="report-single-badge" class="hidden border-2 border-purple-500 text-purple-500 font-bold px-2 py-1 rounded text-xs mb-2 inline-block ml-2" data-i18n="badge_single">ÚNICO</div></div></div>
-                <div class="flex justify-between mt-4 text-gray-600 mb-6"><div><p class="text-sm uppercase tracking-wide text-gray-500" data-i18n="client_label">Cliente</p><p class="font-bold text-lg text-black" id="report-client">Cliente</p></div><div class="text-right"><p class="text-sm uppercase tracking-wide text-gray-500 mb-1">Payment</p><p class="font-bold text-lg text-black uppercase" id="report-payment">USA</p><p class="text-xs text-gray-400 mt-1" id="report-date">--/--/--</p></div></div>
-                <div id="ai-insights-container" class="hidden mb-6 bg-purple-50 border border-purple-200 rounded-lg p-4"><h4 class="text-purple-700 font-bold mb-2 flex items-center gap-2"><i class="fa-solid fa-wand-magic-sparkles"></i> <span data-i18n="ai_summary_title">Resumen IA</span></h4><p id="ai-insights-text" class="text-sm text-gray-700 leading-relaxed italic">...</p></div>
-                <table class="w-full text-sm text-left text-gray-600 mb-8"><thead class="text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-300"><tr><th class="px-2 py-3" data-i18n="col_date">Fecha</th><th class="px-2 py-3" data-i18n="col_concept">Concepto</th><th class="px-2 py-3 text-right" data-i18n="col_orig_amount">Monto</th><th class="px-2 py-3 text-center" data-i18n="col_rate">TC</th><th class="px-2 py-3 text-right font-bold text-green-700" data-i18n="col_total_usd">Total USD</th></tr></thead><tbody id="report-table-body"></tbody></table>
-                <div class="flex flex-col md:flex-row justify-end gap-4"><div class="w-full md:w-1/3 space-y-3"><div class="bg-gray-50 p-4 rounded border border-gray-200"><h4 class="font-bold text-gray-700 border-b border-gray-300 pb-2 mb-2 text-center" data-i18n="breakdown_title">Desglose</h4><div class="flex justify-between text-sm mb-1"><span data-i18n="real_mxn">Pesos:</span><span id="report-real-mxn" class="font-mono">$0.00</span></div><div class="flex justify-between text-sm"><span data-i18n="real_usd">Dólares:</span><span id="report-real-usd" class="font-mono">$0.00</span></div></div></div><div class="w-full md:w-1/3 space-y-3"><div class="bg-blue-50 p-4 rounded border border-blue-200 shadow-sm"><h4 class="font-bold text-blue-800 border-b border-blue-300 pb-2 mb-2 text-center" data-i18n="final_total_title">Total Final</h4><div class="flex justify-between text-sm mb-1"><span data-i18n="real_usd">Real USD:</span><span id="report-final-usd-real">$0.00</span></div><div class="flex justify-between text-sm border-b border-blue-200 pb-1 mb-1"><span data-i18n="approx_usd">Aprox USD:</span><span id="report-final-usd-approx">$0.00</span></div><div class="flex justify-between text-lg font-bold text-gray-700 mt-2 pt-1"><span data-i18n="subtotal">Subtotal:</span><span id="report-subtotal-grand">$0.00 USD</span></div><div id="customer-surcharge-row" class="hidden border-t border-blue-200 mt-2 pt-2"><div class="flex justify-between text-sm text-indigo-600 font-bold mb-1"><span data-i18n="surcharge_label">+15%:</span><span id="report-surcharge">$0.00</span></div><div class="flex justify-between text-xl font-extrabold text-indigo-800 mt-1"><span data-i18n="bill_total">A FACTURAR:</span><span id="report-final-bill">$0.00 USD</span></div></div><div id="standard-total-row"><div class="flex justify-between text-xl font-bold text-green-700 mt-2 pt-1"><span data-i18n="grand_total">TOTAL:</span><span id="report-grand-total">$0.00 USD</span></div></div></div></div></div>
-                <div class="mt-12 pt-8 border-t border-dashed border-gray-300 text-center text-xs text-gray-400"><p data-i18n="generated_by">Gestor de Viáticos</p></div>
+                <div class="border-b-2 border-gray-800 pb-4 mb-6 flex justify-between items-start">
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-900">Reporte de Gastos</h1>
+                        <p class="text-sm text-gray-500 mt-1" id="report-exp-code">EXP-000000</p>
+                    </div>
+                    <div class="text-right">
+                        <div id="report-watermark" class="hidden border-2 border-red-500 text-red-500 font-bold px-2 py-1 rounded transform -rotate-12 text-xs mb-2 inline-block">ARCHIVADO</div>
+                        <div id="report-single-badge" class="hidden border-2 border-purple-500 text-purple-500 font-bold px-2 py-1 rounded text-xs mb-2 inline-block ml-2">GASTO ÚNICO</div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-between mt-4 text-gray-600 mb-6">
+                    <div>
+                        <p class="text-sm uppercase tracking-wide text-gray-500">Cliente</p>
+                        <p class="font-bold text-lg text-black" id="report-client">Cliente</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm uppercase tracking-wide text-gray-500 mb-1">Payment</p>
+                        <p class="font-bold text-lg text-black uppercase" id="report-payment">USA</p>
+                        <p class="text-xs text-gray-400 mt-1" id="report-date">--/--/--</p>
+                    </div>
+                </div>
+
+                <div id="ai-insights-container" class="hidden mb-6 bg-purple-50 border border-purple-200 rounded-lg p-4">
+                    <h4 class="text-purple-700 font-bold mb-2 flex items-center gap-2"><i class="fa-solid fa-wand-magic-sparkles"></i> Resumen de Auditoría IA</h4>
+                    <p id="ai-insights-text" class="text-sm text-gray-700 leading-relaxed italic">Generando análisis...</p>
+                </div>
+
+                <table class="w-full text-sm text-left text-gray-600 mb-8">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-300">
+                        <tr>
+                            <th class="px-2 py-3">Fecha</th>
+                            <th class="px-2 py-3">Concepto</th>
+                            <th class="px-2 py-3 text-right">Monto Original</th>
+                            <th class="px-2 py-3 text-center">T. Cambio</th>
+                            <th class="px-2 py-3 text-right font-bold text-green-700">Total USD (Est.)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="report-table-body"></tbody>
+                </table>
+
+                <div class="flex flex-col md:flex-row justify-end gap-4">
+                    <div class="w-full md:w-1/3 space-y-3">
+                        <div class="bg-gray-50 p-4 rounded border border-gray-200">
+                            <h4 class="font-bold text-gray-700 border-b border-gray-300 pb-2 mb-2 text-center">Desglose de Origen</h4>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span>Pesos Reales:</span>
+                                <span id="report-real-mxn" class="font-mono">$0.00</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span>Dólares Reales:</span>
+                                <span id="report-real-usd" class="font-mono">$0.00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-full md:w-1/3 space-y-3">
+                        <div class="bg-blue-50 p-4 rounded border border-blue-200 shadow-sm">
+                            <h4 class="font-bold text-blue-800 border-b border-blue-300 pb-2 mb-2 text-center">Total Final (USD)</h4>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span>Dólares Reales:</span>
+                                <span id="report-final-usd-real">$0.00</span>
+                            </div>
+                            <div class="flex justify-between text-sm border-b border-blue-200 pb-1 mb-1">
+                                <span>Dólares Aprox (de MXN):</span>
+                                <span id="report-final-usd-approx">$0.00</span>
+                            </div>
+                            <div class="flex justify-between text-lg font-bold text-gray-700 mt-2 pt-1">
+                                <span>Subtotal:</span>
+                                <span id="report-subtotal-grand">$0.00 USD</span>
+                            </div>
+                            
+                            <!-- SECCIÓN CONDICIONAL CUSTOMER -->
+                            <div id="customer-surcharge-row" class="hidden border-t border-blue-200 mt-2 pt-2">
+                                <div class="flex justify-between text-sm text-indigo-600 font-bold mb-1">
+                                    <span>+ Cargo Cliente (15%):</span>
+                                    <span id="report-surcharge">$0.00</span>
+                                </div>
+                                <div class="flex justify-between text-xl font-extrabold text-indigo-800 mt-1">
+                                    <span>TOTAL A FACTURAR:</span>
+                                    <span id="report-final-bill">$0.00 USD</span>
+                                </div>
+                            </div>
+                            
+                            <div id="standard-total-row">
+                                <div class="flex justify-between text-xl font-bold text-green-700 mt-2 pt-1">
+                                    <span>GRAN TOTAL:</span>
+                                    <span id="report-grand-total">$0.00 USD</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-12 pt-8 border-t border-dashed border-gray-300 text-center text-xs text-gray-400">
+                    <p>Generado por Gestor de Viáticos</p>
+                </div>
             </div>
         </div>
     </main>
 
-    <!-- MODAL SETTINGS -->
-    <div id="modal-settings" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4 no-print"><div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6"><h3 class="font-bold text-xl mb-4 text-blue-800">Conexión Dropbox</h3><div class="bg-blue-50 p-3 rounded border border-blue-200 text-xs text-blue-800 mb-4"><p><b>Status:</b> App Key configurada.</p><code id="redirect-uri-display" class="block bg-white p-1 mt-1 border rounded select-all font-mono text-[10px]"></code></div><div id="dropbox-status-area" class="mb-4 text-center"><button onclick="app.connectDropbox()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-bold w-full flex items-center justify-center gap-2"><i class="fa-brands fa-dropbox"></i> Conectar</button><p id="dbx-connection-msg" class="text-xs text-gray-500 mt-2">No conectado.</p></div><div class="flex justify-end gap-2 border-t pt-4"><button onclick="app.closeModals()" class="px-4 py-2 text-gray-600 rounded-lg" data-i18n="close">Cerrar</button></div></div></div>
+    <!-- Modals de Configuración y Nuevo Viaje -->
+    <div id="modal-new-trip" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4 no-print">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-up">
+            <div class="bg-blue-600 p-4">
+                <h3 class="text-white font-bold text-lg">Nuevo Viaje</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Nombre del Cliente</label>
+                    <input type="text" id="new-trip-client" placeholder="Ej. Empresa ABC" class="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                
+                <!-- NUEVO CAMPO CIUDAD -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Ciudad</label>
+                    <input type="text" id="new-trip-city" placeholder="Ej. Ciudad de México" class="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
 
-    <!-- MODAL NEW TRIP -->
-    <div id="modal-new-trip" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4 no-print"><div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-up"><div class="bg-blue-600 p-4"><h3 class="text-white font-bold text-lg" data-i18n="new_trip_title">Nuevo Viaje</h3></div><div class="p-6 space-y-4"><div><label class="block text-sm font-medium text-gray-700" data-i18n="client_label">Cliente</label><input type="text" id="new-trip-client" placeholder="Ej. Empresa" class="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div><div><label class="block text-sm font-medium text-gray-700" data-i18n="city_label">Ciudad</label><input type="text" id="new-trip-city" placeholder="Ej. Ciudad" class="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div><div><label class="block text-sm font-medium text-gray-700">Payment Entity</label><select id="new-trip-payment" class="w-full mt-1 p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none"><option value="FLEXOWASH LLC">FLEXOWASH LLC</option><option value="FLEXOWASH APS">FLEXOWASH APS</option><option value="Customer">Customer</option></select></div><div class="flex flex-col gap-2 mt-2 bg-gray-50 p-3 rounded-lg border border-gray-200"><label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" id="new-trip-usd-default" class="form-checkbox h-4 w-4 text-blue-600 rounded"><span class="text-sm text-gray-700 font-medium" data-i18n="opt_usd_default">Moneda Principal: Dólares (USD)</span></label><label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" id="new-trip-single" class="form-checkbox h-4 w-4 text-purple-600 rounded"><span class="text-sm text-gray-700 font-medium" data-i18n="opt_single_expense">Gasto Único (Ej. Equipo/Herramientas)</span></label></div><div><label class="block text-sm font-medium text-gray-700" data-i18n="start_date_label">Inicio</label><input type="date" id="new-trip-date" class="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div><div class="flex justify-end gap-2 mt-4"><button onclick="app.closeModals()" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg" data-i18n="cancel">Cancelar</button><button onclick="app.createTrip()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" data-i18n="create_btn">Crear</button></div></div></div></div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Payment Entity</label>
+                    <select id="new-trip-payment" class="w-full mt-1 p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="FLEXOWASH LLC">FLEXOWASH LLC</option>
+                        <option value="FLEXOWASH APS">FLEXOWASH APS</option>
+                        <option value="Customer">Customer</option>
+                    </select>
+                </div>
+                
+                <!-- NUEVAS OPCIONES: Moneda y Gasto Único -->
+                <div class="flex flex-col gap-2 mt-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" id="new-trip-usd-default" class="form-checkbox h-4 w-4 text-blue-600 rounded">
+                        <span class="text-sm text-gray-700 font-medium">Moneda Principal: Dólares (USD)</span>
+                    </label>
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" id="new-trip-single" class="form-checkbox h-4 w-4 text-purple-600 rounded">
+                        <span class="text-sm text-gray-700 font-medium">Gasto Único (Ej. Equipo/Herramientas)</span>
+                    </label>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Fecha de Inicio</label>
+                    <input type="date" id="new-trip-date" class="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div class="flex justify-end gap-2 mt-4">
+                    <button onclick="app.closeModals()" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
+                    <button onclick="app.createTrip()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Crear Viaje</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-settings" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4 no-print">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+            <h3 class="font-bold text-xl mb-4">Configuración</h3>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Dropbox Access Token</label>
+                <input type="password" id="dropbox-token-input" placeholder="Inserta tu token aquí" class="w-full p-2 border rounded-lg text-sm">
+                <p class="text-xs text-gray-500 mt-1">⚠️ Usa un token temporal si la app no está publicada.</p>
+            </div>
+            <div class="flex justify-end gap-2">
+                <button onclick="app.closeModals()" class="px-4 py-2 text-gray-600 rounded-lg">Cerrar</button>
+                <button onclick="app.saveSettings()" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Guardar</button>
+            </div>
+        </div>
+    </div>
 
     <script type="module">
-        // CAPTURAR ERRORES GLOBALES
-        window.onerror = function(msg, url, line) {
-            const errDiv = document.getElementById('global-error');
-            errDiv.style.display = 'block';
-            errDiv.innerHTML = `❌ Error en la App: ${msg}<br><small>Línea: ${line}</small>`;
-            return false;
-        };
-
-        // --- CONFIGURACIÓN ---
-        const DROPBOX_APP_KEY = "d7twhkyuuq0govc";
-        
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, collection, addDoc, onSnapshot, query, where, serverTimestamp, updateDoc, deleteDoc, getDocs, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         if (window.location.protocol === 'file:') document.getElementById('localhost-warning').classList.remove('hidden');
+
         const apiKey = ""; 
-        const firebaseConfig = { apiKey: "AIzaSyClZTvz0_GvqNlw7BIogRPYjQtPKQd9SL4", authDomain: "fw-expenses.firebaseapp.com", databaseURL: "https://fw-expenses-default-rtdb.firebaseio.com", projectId: "fw-expenses", storageBucket: "fw-expenses.firebasestorage.app", messagingSenderId: "1083599671052", appId: "1:1083599671052:web:e69165ad332c7c46000329" };
-        
-        let appFirebase, auth, db;
-        try { appFirebase = initializeApp(firebaseConfig); auth = getAuth(appFirebase); db = getFirestore(appFirebase); setPersistence(auth, browserLocalPersistence).catch(e => console.log(e)); } catch (e) { console.error(e); }
 
-        const REDIRECT_URI = window.location.origin + window.location.pathname; 
-        document.getElementById('redirect-uri-display').innerText = REDIRECT_URI;
-
-        const translations = {
-            es: { secure_system: "🔒 SISTEMA SEGURO v2.4", waiting_login: "Esperando Login...", access_title: "Acceso Viáticos", access_desc: "Ingresa tu usuario.", user_label: "USUARIO", password_label: "CONTRASEÑA", login_btn: "Entrar", logout: "Salir", active_trips: "Viajes Activos", active_trips_desc: "En curso", new_btn: "Nuevo", loading: "Cargando...", closed_history: "Historial Cerrado", no_closed_trips: "Sin viajes cerrados.", search_title: "Buscar por número", search_btn: "Buscar", est_total_card: "Total Estimado (Tarjeta USD)", report_btn: "Reporte", close_trip_btn: "Cerrar Viaje", closed_banner: "CERRADO", expenses_title: "Gastos", add_expense_title: "Registrar Gasto", ticket_label: "Ticket / Recibo", tap_photo: "Foto", ai_fill_btn: "✨ IA", uploading: "Subiendo...", ai_analyzing: "Analizando...", date_label: "Fecha", time_label: "Hora", concept_label: "Concepto", amount_label: "Monto Orig.", currency_label: "Moneda", rate_label: "T. Cambio", rate_hint: "Ajustar si es necesario", est_card_charge: "Cargo estimado:", save_btn: "Guardar", back: "Volver", ai_audit_btn: "Auditoría", pdf_print_btn: "PDF/Print", report_title: "Reporte de Gastos", archived_mark: "ARCHIVADO", badge_single: "GASTO ÚNICO", client_label: "Cliente", ai_summary_title: "Resumen IA", col_date: "Fecha", col_concept: "Concepto", col_orig_amount: "Monto", col_rate: "TC", col_total_usd: "Total USD", breakdown_title: "Desglose Origen", real_mxn: "MXN Reales:", real_usd: "USD Reales:", final_total_title: "Total Final", approx_usd: "USD Aprox:", subtotal: "Subtotal:", surcharge_label: "+ Cargo Cliente (15%):", bill_total: "A FACTURAR:", grand_total: "GRAN TOTAL:", generated_by: "Gestor Viáticos", new_trip_title: "Nuevo Viaje", city_label: "Ciudad", opt_usd_default: "Moneda USD Default", opt_single_expense: "Gasto Único", start_date_label: "Inicio", cancel: "Cancelar", create_btn: "Crear", settings_title: "Configuración", close: "Cerrar", save: "Guardar", yes: "Sí", understood: "Entendido", c_food: "Alimentos", c_uber: "Uber/Taxi", c_flight: "Avión", c_car: "Renta Auto", c_gas: "Gasolina", c_tolls: "Casetas", c_lodging: "Hospedaje", c_transport: "Transporte", c_others: "Otros" },
-            en: { secure_system: "🔒 SECURE SYSTEM v2.4", waiting_login: "Waiting Login...", access_title: "Expense Access", access_desc: "Enter username.", user_label: "USERNAME", password_label: "PASSWORD", login_btn: "Login", logout: "Logout", active_trips: "Active Trips", active_trips_desc: "Ongoing", new_btn: "New", loading: "Loading...", closed_history: "Closed History", no_closed_trips: "No recent closed trips.", search_title: "Search by number", search_btn: "Search", est_total_card: "Est. Total (Card USD)", report_btn: "Report", close_trip_btn: "Close Trip", closed_banner: "CLOSED", expenses_title: "Expenses", add_expense_title: "Add Expense", ticket_label: "Receipt", tap_photo: "Photo", ai_fill_btn: "✨ AI Fill", uploading: "Uploading...", ai_analyzing: "Analyzing...", date_label: "Date", time_label: "Time", concept_label: "Concept", amount_label: "Orig. Amount", currency_label: "Currency", rate_label: "Ex. Rate", rate_hint: "Adjust if needed", est_card_charge: "Est. Charge:", save_btn: "Save", back: "Back", ai_audit_btn: "AI Audit", pdf_print_btn: "PDF/Print", report_title: "Expense Report", archived_mark: "ARCHIVED", badge_single: "SINGLE EXPENSE", client_label: "Client", ai_summary_title: "AI Summary", col_date: "Date", col_concept: "Concept", col_orig_amount: "Amount", col_rate: "Rate", col_total_usd: "Total USD", breakdown_title: "Breakdown", real_mxn: "Real MXN:", real_usd: "Real USD:", final_total_title: "Final Total", approx_usd: "Approx USD:", subtotal: "Subtotal:", surcharge_label: "+ Customer Fee (15%):", bill_total: "TO BILL:", grand_total: "GRAND TOTAL:", generated_by: "Expense Manager", new_trip_title: "New Trip", city_label: "City", opt_usd_default: "USD Default", opt_single_expense: "Single Expense", start_date_label: "Start Date", cancel: "Cancel", create_btn: "Create", settings_title: "Settings", close: "Close", save: "Save", yes: "Yes", understood: "Understood", c_food: "Food", c_uber: "Uber/Taxi", c_flight: "Flight", c_car: "Car Rental", c_gas: "Gas", c_tolls: "Tolls", c_lodging: "Lodging", c_transport: "Transport", c_others: "Others" }
+        const firebaseConfig = {
+            apiKey: "AIzaSyClZTvz0_GvqNlw7BIogRPYjQtPKQd9SL4",
+            authDomain: "fw-expenses.firebaseapp.com",
+            databaseURL: "https://fw-expenses-default-rtdb.firebaseio.com",
+            projectId: "fw-expenses",
+            storageBucket: "fw-expenses.firebasestorage.app",
+            messagingSenderId: "1083599671052",
+            appId: "1:1083599671052:web:e69165ad332c7c46000329"
         };
 
-        const state = { currentTrip: null, expenses: [], currentFile: null, base64Image: null, user: null, allTrips: [], tripTotals: {}, lang: 'es', dbxAppKey: DROPBOX_APP_KEY, dbxRefreshToken: localStorage.getItem('dbx_refresh_token') || '', dbxAccessToken: null, dbxExpiresAt: 0 };
+        let appFirebase, auth, db;
+        try {
+            appFirebase = initializeApp(firebaseConfig);
+            auth = getAuth(appFirebase);
+            db = getFirestore(appFirebase);
+            setPersistence(auth, browserLocalPersistence);
+        } catch (e) { alert("Error iniciando Firebase: " + e.message); }
+
+        const state = {
+            currentTrip: null,
+            expenses: [],
+            dropboxToken: localStorage.getItem('dropbox_token') || '',
+            currentFile: null,
+            base64Image: null,
+            user: null,
+            allTrips: [],
+            tripTotals: {}
+        };
 
         window.app = {
-            toggleLanguage: () => { state.lang = state.lang === 'es' ? 'en' : 'es'; document.getElementById('lang-display').innerText = state.lang.toUpperCase(); app.updateTranslations(); if(state.currentTrip) app.selectTrip(state.currentTrip); else app.renderDashboard(); },
-            t: (key) => translations[state.lang][key] || key,
-            updateTranslations: () => { document.querySelectorAll('[data-i18n]').forEach(el => { const key = el.getAttribute('data-i18n'); if(key) el.innerText = app.t(key); }); },
-            translateConcept: (c) => { if(!c) return ""; let base = c.split(":")[0]; let extra = c.includes(":") ? ": " + c.split(":")[1] : ""; const map = {"Alimentos":"c_food","Uber/Taxi":"c_uber","Boleto de avión":"c_flight","Renta de carro":"c_car","Gasolina":"c_gas","Casetas":"c_tolls","Hospedaje":"c_lodging","Transporte":"c_transport","Otros":"c_others"}; return (map[base] ? app.t(map[base]) : base) + extra; },
+            showView: (viewId) => {
+                document.querySelectorAll('.view-section').forEach(el => el.classList.add('hide'));
+                document.getElementById(viewId).classList.remove('hide');
+                window.scrollTo(0,0);
+            },
+            showSettings: () => {
+                document.getElementById('dropbox-token-input').value = state.dropboxToken;
+                document.getElementById('modal-settings').classList.remove('hidden');
+            },
+            saveSettings: () => {
+                state.dropboxToken = document.getElementById('dropbox-token-input').value.trim();
+                localStorage.setItem('dropbox_token', state.dropboxToken);
+                app.closeModals();
+            },
+            closeModals: () => {
+                document.getElementById('modal-new-trip').classList.add('hidden');
+                document.getElementById('modal-settings').classList.add('hidden');
+            },
+            showNewTripModal: () => {
+                document.getElementById('new-trip-date').valueAsDate = new Date();
+                document.getElementById('modal-new-trip').classList.remove('hidden');
+                document.getElementById('new-trip-usd-default').checked = false;
+                document.getElementById('new-trip-single').checked = false;
+            },
+            loadDashboard: () => {
+                state.currentTrip = null;
+                app.showView('view-dashboard');
+            },
+            showLoader: (msg) => {
+                document.getElementById('loader-text').innerText = msg;
+                document.getElementById('full-screen-loader').classList.remove('hidden');
+            },
+            hideLoader: () => {
+                document.getElementById('full-screen-loader').classList.add('hidden');
+            },
+            showAlert: (title, msg) => {
+                document.getElementById('alert-title').innerText = title;
+                document.getElementById('alert-message').innerText = msg;
+                document.getElementById('custom-modal-alert').classList.remove('hidden');
+            },
+            hideConfirm: () => {
+                document.getElementById('custom-modal-confirm').classList.add('hidden');
+            },
 
-            showSettings: () => { const statusMsg = document.getElementById('dbx-connection-msg'); if(state.dbxRefreshToken) { statusMsg.innerText = "✅ Conexión Permanente"; statusMsg.className = "text-xs text-green-600 mt-2 font-bold"; } else { statusMsg.innerText = "⚠️ Sin conexión"; statusMsg.className = "text-xs text-red-500 mt-2"; } document.getElementById('modal-settings').classList.remove('hidden'); },
-            connectDropbox: () => { if(!state.dbxAppKey) return alert("Define DROPBOX_APP_KEY."); const dbxAuth = new Dropbox.DropboxAuth({ clientId: state.dbxAppKey }); dbxAuth.getAuthenticationUrl(REDIRECT_URI, undefined, 'code', 'offline', undefined, undefined, true).then(authUrl => { sessionStorage.setItem('dbx_auth_pending', 'true'); window.location.href = authUrl; }).catch(error => alert("Error auth: " + error)); },
-            uploadToDropbox: async (file) => { if (!state.dbxRefreshToken) { alert("⚠️ Dropbox desconectado."); return null; } try { document.getElementById('upload-status').classList.remove('hidden'); const dbxAuth = new Dropbox.DropboxAuth({ clientId: state.dbxAppKey, refreshToken: state.dbxRefreshToken }); if (!state.dbxAccessToken || Date.now() > state.dbxExpiresAt) { const tokenResponse = await dbxAuth.refreshAccessToken(); state.dbxAccessToken = tokenResponse.result.access_token; state.dbxExpiresAt = Date.now() + (tokenResponse.result.expires_in * 1000) - 60000; dbxAuth.setAccessToken(state.dbxAccessToken); } else { dbxAuth.setAccessToken(state.dbxAccessToken); } const dbx = new Dropbox.Dropbox({ auth: dbxAuth }); const tripCode = state.currentTrip.expCode || 'SIN-CODIGO'; const consecutive = state.expenses.length + 1; const extension = file.name.split('.').pop(); const finalName = `${tripCode}-${consecutive}.${extension}`; const fileName = `/gastos_app/${finalName}`; const response = await dbx.filesUpload({ path: fileName, contents: file }); const share = await dbx.sharingCreateSharedLinkWithSettings({ path: response.result.path_lower }); return share.result.url; } catch (error) { console.error("Error Dropbox:", error); if(error.status === 401) { alert("Reconecta Dropbox."); localStorage.removeItem('dbx_refresh_token'); state.dbxRefreshToken = ''; } return null; } },
+            // --- LOGIN SYSTEM ---
+            handleLogin: async (e) => {
+                e.preventDefault();
+                const rawUser = document.getElementById('login-username').value;
+                const username = rawUser.replace(/\s+/g, ''); 
+                const pass = document.getElementById('login-pass').value;
+                
+                if (pass.length < 6) return app.showAlert("Contraseña corta", "Mínimo 6 caracteres.");
+                const email = `${username}@viaticos.app`; 
 
-            showLoader: (msg) => { document.getElementById('loader-text').innerText = msg; document.getElementById('full-screen-loader').classList.remove('hidden'); },
-            hideLoader: () => { document.getElementById('full-screen-loader').classList.add('hidden'); },
-            showAlert: (title, msg) => { document.getElementById('alert-title').innerText = title; document.getElementById('alert-message').innerText = msg; document.getElementById('custom-modal-alert').classList.remove('hidden'); },
-            hideConfirm: () => { document.getElementById('custom-modal-confirm').classList.add('hidden'); },
-            closeModals: () => { document.getElementById('modal-new-trip').classList.add('hidden'); document.getElementById('modal-settings').classList.add('hidden'); },
-            showNewTripModal: () => { document.getElementById('new-trip-date').valueAsDate = new Date(); document.getElementById('modal-new-trip').classList.remove('hidden'); document.getElementById('new-trip-usd-default').checked = false; document.getElementById('new-trip-single').checked = false; },
-            loadDashboard: () => { state.currentTrip = null; app.showView('view-dashboard'); app.renderDashboard(); },
-            handleLogin: async (e) => { e.preventDefault(); const rawUser = document.getElementById('login-username').value; const username = rawUser.replace(/\s+/g, ''); const pass = document.getElementById('login-pass').value; if (pass.length < 6) return app.showAlert("Error", "Min 6 chars"); const email = `${username}@viaticos.app`; app.showLoader("Login..."); try { await signInWithEmailAndPassword(auth, email, pass); } catch (error) { if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') { try { app.showLoader("Creating..."); await createUserWithEmailAndPassword(auth, email, pass); } catch (ce) { app.showAlert("Error", ce.message); } } else { app.showAlert("Error", error.message); } } finally { app.hideLoader(); } },
-            logout: () => { signOut(auth); location.reload(); },
-            createTrip: async () => { if(!state.user) return; const client = document.getElementById('new-trip-client').value.trim(); const city = document.getElementById('new-trip-city').value.trim(); const date = document.getElementById('new-trip-date').value; const payment = document.getElementById('new-trip-payment').value; const defUSD = document.getElementById('new-trip-usd-default').checked; const single = document.getElementById('new-trip-single').checked; if(!client||!date||!city) return app.showAlert("Data Missing", "Complete all fields"); app.showLoader("Creating..."); try { const tripRef = doc(collection(db, 'viajes_simples')); const counterRef = doc(db, 'counters', 'global_trips'); await runTransaction(db, async (t) => { const cDoc = await t.get(counterRef); let newC = 1; if(cDoc.exists()) newC = (cDoc.data().current || 0) + 1; t.set(counterRef, {current: newC}, {merge:true}); const d = { client: client, city: city, payment: payment, startDate: date, status: 'active', expCode: 'EXP-'+String(newC).padStart(6,'0'), defaultUSD: defUSD, isSingle: single, createdAt: serverTimestamp(), userId: state.user.uid }; t.set(tripRef, d); state.tempNewTrip = {id: tripRef.id, ...d}; }); app.closeModals(); document.getElementById('new-trip-client').value=''; document.getElementById('new-trip-city').value=''; app.selectTrip(state.tempNewTrip); } catch(e) { app.showAlert("Error", e.message); } finally { app.hideLoader(); } },
-            promptArchiveTrip: () => { if(!state.currentTrip) return; const modal = document.getElementById('custom-modal-confirm'); document.getElementById('confirm-title').innerText = app.t('close_trip_btn'); document.getElementById('confirm-message').innerText = `${state.currentTrip.expCode}?`; document.getElementById('btn-confirm-action').onclick = () => { app.hideConfirm(); app.doArchiveTrip(); }; modal.classList.remove('hidden'); },
-            doArchiveTrip: async () => { app.showLoader("Archiving..."); try { await updateDoc(doc(db, 'viajes_simples', state.currentTrip.id), { status: 'archived' }); app.showAlert("OK", "Archived."); app.loadDashboard(); } catch(e) { app.showAlert("Error", "Failed."); } finally { app.hideLoader(); } },
-            promptDeleteExpense: (eid) => { const modal = document.getElementById('custom-modal-confirm'); document.getElementById('confirm-title').innerText = "Delete"; document.getElementById('confirm-message').innerText = "Sure?"; document.getElementById('btn-confirm-action').onclick = () => { app.hideConfirm(); app.doDeleteExpense(eid); }; modal.classList.remove('hidden'); },
-            doDeleteExpense: async (eid) => { app.showLoader("Deleting..."); try { await deleteDoc(doc(db, 'gastos_simples', eid)); } catch(e) { app.showAlert("Error", "Failed."); } finally { app.hideLoader(); } },
-            searchArchivedTrip: async () => { const val = document.getElementById('search-trip-id').value.trim(); if(!val) return app.showAlert("Search", "Enter number"); const paddedNum = String(val).padStart(6, '0'); const code = 'EXP-'+paddedNum; app.showLoader(`Searching ${code}...`); try { const q = query(collection(db, 'viajes_simples'), where('expCode','==',code), where('userId','==',state.user.uid)); const s = await getDocs(q); if(s.empty) app.showAlert("404","No existe."); else app.selectTrip({id:s.docs[0].id, ...s.docs[0].data()}); } catch(e) { app.showAlert("Error","Fallo."); } finally { app.hideLoader(); } },
-            selectTrip: (trip) => { state.currentTrip = trip; document.getElementById('detail-client-name').innerHTML = `${trip.client} <span class="block text-sm font-normal text-gray-500">${trip.city||''}</span>`; document.getElementById('detail-trip-date').innerText = trip.startDate; document.getElementById('detail-trip-code').innerText = trip.expCode; document.getElementById('detail-trip-type-badge').classList.toggle('hidden', !trip.isSingle); const pTag = document.getElementById('detail-trip-payment'); pTag.innerText = trip.payment || "FLEXOWASH LLC"; pTag.className = trip.payment === 'FLEXOWASH APS' ? "bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs font-bold" : trip.payment === 'Customer' ? "bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-bold" : "bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-bold"; const isArchived = trip.status === 'archived'; document.getElementById('btn-close-trip').classList.toggle('hidden', isArchived); document.getElementById('archived-banner').classList.toggle('hidden', !isArchived); const btnAdd = document.getElementById('btn-add-floating'); btnAdd.className = isArchived ? "fixed bottom-6 right-6 bg-gray-700 text-white w-14 h-14 rounded-full shadow-xl flex items-center justify-center" : "fixed bottom-6 right-6 bg-blue-600 text-white w-14 h-14 rounded-full shadow-xl flex items-center justify-center hover:bg-blue-700"; app.listenToExpenses(trip.id); app.showView('view-trip-details'); },
-            toggleOtherDesc: () => { const c = document.getElementById('expense-concept').value; const i = document.getElementById('expense-other-desc'); if(c==='Otros'){ i.classList.remove('hidden'); i.required=true; } else { i.classList.add('hidden'); i.required=false; i.value=''; } },
-            showAddExpense: () => { document.getElementById('expense-form').reset(); document.getElementById('expense-date').valueAsDate = new Date(); document.getElementById('expense-time').value = new Date().toTimeString().slice(0,5); app.fetchExchangeRate(); if(state.currentTrip?.defaultUSD){ document.getElementById('expense-currency').value='USD'; app.toggleExchangeRate(); } else { document.getElementById('expense-currency').value='MXN'; app.toggleExchangeRate(); } app.toggleOtherDesc(); state.currentFile=null; state.base64Image=null; document.getElementById('image-preview').classList.add('hidden'); document.getElementById('preview-container').classList.remove('hidden'); document.getElementById('upload-status').classList.add('hidden'); document.getElementById('ai-status').classList.add('hidden'); document.getElementById('btn-analyze-ticket').classList.add('hidden'); document.getElementById('preview-usd').innerText="$0.00 USD"; app.showView('view-add-expense'); },
-            fetchExchangeRate: async () => { try { const r = await fetch("https://open.er-api.com/v6/latest/USD"); const d = await r.json(); if(d?.rates?.MXN) { document.getElementById('exchange-rate').value = d.rates.MXN.toFixed(2); document.getElementById('rate-status').innerText = `Actualizado: $${d.rates.MXN.toFixed(2)}`; app.calculatePreview(); } } catch(e) { document.getElementById('rate-status').innerText = "Local"; } },
-            toggleExchangeRate: () => { const c = document.getElementById('expense-currency').value; document.getElementById('exchange-rate-container').classList.toggle('hidden', c !== 'MXN'); app.calculatePreview(); },
-            calculatePreview: () => { const a = parseFloat(document.getElementById('expense-amount').value)||0; const c = document.getElementById('expense-currency').value; const r = parseFloat(document.getElementById('exchange-rate').value)||1; let f = c==='MXN' ? a/r : a; document.getElementById('preview-usd').innerText = `$${f.toFixed(2)} USD`; },
+                app.showLoader("Iniciando sesión segura...");
+                try {
+                    await signInWithEmailAndPassword(auth, email, pass);
+                } catch (error) {
+                    if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+                        try {
+                            app.showLoader("Creando cuenta nueva...");
+                            await createUserWithEmailAndPassword(auth, email, pass);
+                        } catch (createErr) {
+                            app.showAlert("Error Registro", createErr.message);
+                        }
+                    } else {
+                        app.showAlert("Error Login", error.message);
+                    }
+                } finally {
+                    app.hideLoader();
+                }
+            },
+            logout: () => {
+                signOut(auth);
+                location.reload();
+            },
+
+            // --- VIAJES ---
+            createTrip: async () => {
+                if(!state.user) return app.showAlert("Error", "No autenticado");
+                const client = document.getElementById('new-trip-client').value.trim();
+                const city = document.getElementById('new-trip-city').value.trim(); 
+                const date = document.getElementById('new-trip-date').value;
+                const payment = document.getElementById('new-trip-payment').value;
+                
+                const defaultUSD = document.getElementById('new-trip-usd-default').checked;
+                const isSingle = document.getElementById('new-trip-single').checked;
+
+                if(!client || !date || !city) return app.showAlert("Faltan Datos", "Completa el nombre y la fecha."); 
+                
+                app.showLoader("Creando viaje...");
+                try {
+                    const tripRef = doc(collection(db, 'viajes_simples'));
+                    const counterRef = doc(db, 'counters', 'global_trips');
+                    await runTransaction(db, async (transaction) => {
+                        const counterDoc = await transaction.get(counterRef);
+                        let newCount = 1;
+                        if (counterDoc.exists()) {
+                            const current = counterDoc.data().current || 0;
+                            newCount = current + 1;
+                        }
+                        const expCode = 'EXP-' + String(newCount).padStart(6, '0');
+                        transaction.set(counterRef, { current: newCount }, { merge: true });
+                        
+                        const tripData = {
+                            client: client,
+                            city: city, 
+                            payment: payment,
+                            startDate: date,
+                            status: 'active',
+                            expCode: expCode,
+                            defaultUSD: defaultUSD, 
+                            isSingle: isSingle,     
+                            createdAt: serverTimestamp(),
+                            userId: state.user.uid
+                        };
+                        transaction.set(tripRef, tripData);
+                        state.tempNewTrip = { id: tripRef.id, ...tripData, createdAt: new Date() };
+                    });
+                    app.closeModals();
+                    document.getElementById('new-trip-client').value = '';
+                    document.getElementById('new-trip-city').value = ''; 
+                    app.selectTrip(state.tempNewTrip);
+                } catch (e) {
+                    console.error(e);
+                    app.showAlert("Error", "Save failed.");
+                } finally { app.hideLoader(); }
+            },
+            
+            promptArchiveTrip: () => {
+                if(!state.currentTrip) return;
+                const modal = document.getElementById('custom-modal-confirm');
+                document.getElementById('confirm-title').innerText = "Cerrar Viaje";
+                document.getElementById('confirm-message').innerText = `¿Seguro que deseas cerrar ${state.currentTrip.expCode}?`;
+                document.getElementById('btn-confirm-action').onclick = () => { app.hideConfirm(); app.doArchiveTrip(); };
+                modal.classList.remove('hidden');
+            },
+            doArchiveTrip: async () => {
+                app.showLoader("Archivando...");
+                try {
+                    await updateDoc(doc(db, 'viajes_simples', state.currentTrip.id), { status: 'archived' });
+                    app.showAlert("OK", "Archived.");
+                    app.loadDashboard();
+                } catch(e) { app.showAlert("Error", "Failed."); } finally { app.hideLoader(); }
+            },
+            
+            promptDeleteExpense: (expenseId) => {
+                const modal = document.getElementById('custom-modal-confirm');
+                document.getElementById('confirm-title').innerText = "Delete";
+                document.getElementById('confirm-message').innerText = "Sure?";
+                document.getElementById('btn-confirm-action').onclick = () => { app.hideConfirm(); app.doDeleteExpense(expenseId); };
+                modal.classList.remove('hidden');
+            },
+            doDeleteExpense: async (expenseId) => {
+                app.showLoader("Deleting...");
+                try { await deleteDoc(doc(db, 'gastos_simples', expenseId)); } 
+                catch(e) { app.showAlert("Error", "Failed."); } finally { app.hideLoader(); }
+            },
+
+            searchArchivedTrip: async () => {
+                const inputVal = document.getElementById('search-trip-id').value.trim();
+                if(!inputVal) return app.showAlert("Search", "Enter number");
+                const paddedNum = String(inputVal).padStart(6, '0');
+                const searchCode = 'EXP-' + paddedNum;
+                app.showLoader(`Searching ${searchCode}...`);
+                try {
+                    const q = query(collection(db, 'viajes_simples'), where('expCode', '==', searchCode), where('userId', '==', state.user.uid));
+                    const querySnapshot = await getDocs(q);
+                    if(querySnapshot.empty) app.showAlert("404", "Not found.");
+                    else app.selectTrip({ id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() });
+                } catch(e) { app.showAlert("Error", "Search failed."); } finally { app.hideLoader(); }
+            },
+
+            selectTrip: (trip) => {
+                state.currentTrip = trip;
+                document.getElementById('detail-client-name').innerHTML = `${trip.client} <span class="block text-sm font-normal text-gray-500">${trip.city||''}</span>`;
+                document.getElementById('detail-trip-date').innerText = trip.startDate;
+                document.getElementById('detail-trip-code').innerText = trip.expCode;
+                
+                if (trip.isSingle) {
+                    document.getElementById('detail-trip-type-badge').classList.remove('hidden');
+                } else {
+                    document.getElementById('detail-trip-type-badge').classList.add('hidden');
+                }
+                
+                const paymentTag = document.getElementById('detail-trip-payment');
+                paymentTag.innerText = trip.payment || "FLEXOWASH LLC";
+                paymentTag.className = trip.payment === 'FLEXOWASH APS' ? "bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs font-bold uppercase" : 
+                                       trip.payment === 'Customer' ? "bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-bold uppercase" : 
+                                       "bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-bold uppercase";
+
+                const btnClose = document.getElementById('btn-close-trip');
+                const btnAdd = document.getElementById('btn-add-floating');
+                const banner = document.getElementById('archived-banner');
+
+                if (trip.status === 'archived') {
+                    btnClose.classList.add('hidden');
+                    banner.classList.remove('hidden');
+                    btnAdd.classList.remove('hidden', 'bg-blue-600', 'hover:bg-blue-700');
+                    btnAdd.classList.add('bg-gray-700', 'hover:bg-gray-800'); 
+                } else {
+                    btnClose.classList.remove('hidden');
+                    banner.classList.add('hidden');
+                    btnAdd.classList.remove('hidden', 'bg-gray-700', 'hover:bg-gray-800');
+                    btnAdd.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                }
+                app.listenToExpenses(trip.id);
+                app.showView('view-trip-details');
+            },
+            
+            toggleOtherDesc: () => {
+                const concept = document.getElementById('expense-concept').value;
+                const otherInput = document.getElementById('expense-other-desc');
+                if(concept === 'Otros') { otherInput.classList.remove('hidden'); otherInput.required = true; } 
+                else { otherInput.classList.add('hidden'); otherInput.required = false; otherInput.value = ''; }
+            },
+            showAddExpense: () => {
+                document.getElementById('expense-form').reset();
+                document.getElementById('expense-date').valueAsDate = new Date();
+                document.getElementById('expense-time').value = new Date().toTimeString().slice(0,5);
+                app.fetchExchangeRate();
+                
+                if (state.currentTrip && state.currentTrip.defaultUSD) {
+                     document.getElementById('expense-currency').value = 'USD';
+                     app.toggleExchangeRate(); 
+                } else {
+                     document.getElementById('expense-currency').value = 'MXN';
+                     app.toggleExchangeRate(); 
+                }
+                
+                app.toggleOtherDesc();
+                state.currentFile = null; state.base64Image = null;
+                document.getElementById('image-preview').classList.add('hidden');
+                document.getElementById('preview-container').classList.remove('hidden');
+                document.getElementById('upload-status').classList.add('hidden');
+                document.getElementById('ai-status').classList.add('hidden');
+                document.getElementById('btn-analyze-ticket').classList.add('hidden');
+                document.getElementById('preview-usd').innerText = "$0.00 USD";
+                app.showView('view-add-expense');
+            },
+            fetchExchangeRate: async () => {
+                try {
+                    const response = await fetch("https://open.er-api.com/v6/latest/USD");
+                    const data = await response.json();
+                    if(data && data.rates && data.rates.MXN) {
+                        document.getElementById('exchange-rate').value = data.rates.MXN.toFixed(2);
+                        document.getElementById('rate-status').innerText = `Actualizado: $${data.rates.MXN.toFixed(2)}`;
+                        app.calculatePreview();
+                    }
+                } catch (e) { document.getElementById('rate-status').innerText = "Usando valor guardado"; }
+            },
+            toggleExchangeRate: () => {
+                const currency = document.getElementById('expense-currency').value;
+                if(currency === 'MXN') document.getElementById('exchange-rate-container').classList.remove('hidden');
+                else document.getElementById('exchange-rate-container').classList.add('hidden');
+                app.calculatePreview();
+            },
+            calculatePreview: () => {
+                const amount = parseFloat(document.getElementById('expense-amount').value) || 0;
+                const currency = document.getElementById('expense-currency').value;
+                const rate = parseFloat(document.getElementById('exchange-rate').value) || 1;
+                let finalUSD = (currency === 'MXN') ? amount / rate : amount;
+                document.getElementById('preview-usd').innerText = `$${finalUSD.toFixed(2)} USD`;
+            },
             backToTrip: () => app.showView('view-trip-details'),
-            handleFileSelect: (inp) => { if(inp.files[0]) { const f = inp.files[0]; state.currentFile = f; const r = new FileReader(); r.onload = (e) => { document.getElementById('image-preview').src = e.target.result; document.getElementById('image-preview').classList.remove('hidden'); document.getElementById('preview-container').classList.add('hidden'); state.base64Image = e.target.result.split(',')[1]; document.getElementById('btn-analyze-ticket').classList.remove('hidden'); }; r.readAsDataURL(f); } },
-            analyzeTicketWithGemini: async () => { if(!state.base64Image) return; const btn = document.getElementById('btn-analyze-ticket'); btn.disabled=true; btn.innerHTML="..."; try { if(!apiKey) throw new Error("API Key missing"); const p = `JSON ticket data: {"date":"YYYY-MM-DD","time":"HH:MM","amount":0.00,"currency":"MXN","concept":"Alimentos"}`; const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({contents:[{parts:[{text:p},{inlineData:{mimeType:"image/jpeg",data:state.base64Image}}]}]}) }); const d = await r.json(); const j = JSON.parse(d.candidates[0].content.parts[0].text.replace(/```json|```/g,'').trim()); if(j.date) document.getElementById('expense-date').value=j.date; if(j.time) document.getElementById('expense-time').value=j.time; if(j.amount) document.getElementById('expense-amount').value=j.amount; if(j.currency){ document.getElementById('expense-currency').value=j.currency; app.toggleExchangeRate(); } if(j.concept) document.getElementById('expense-concept').value=j.concept; app.calculatePreview(); } catch(e) { app.showAlert("Error", e.message); } finally { btn.disabled=false; btn.innerHTML="✨ IA"; } },
-            getTripInsights: async () => { if(!apiKey) return; document.getElementById('ai-insights-container').classList.remove('hidden'); document.getElementById('ai-insights-text').innerText="..."; try { const s = state.expenses.map(e=>`${e.concept}: $${e.finalUSD.toFixed(2)}`).join('\n'); const p = `Analiza gastos: ${s}`; const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({contents:[{parts:[{text:p}]}]}) }); const d = await r.json(); document.getElementById('ai-insights-text').innerText=d.candidates[0].content.parts[0].text; } catch(e) { document.getElementById('ai-insights-text').innerText="Error IA."; } },
-            saveExpense: async (e) => { e.preventDefault(); app.showLoader("Saving..."); let url=""; if(state.currentFile && state.dropboxToken) url = await app.uploadToDropbox(state.currentFile) || ""; else if(state.currentFile) url="https://placehold.co/600x400/orange/white?text=Foto+Local"; const amt = parseFloat(document.getElementById('expense-amount').value); const cur = document.getElementById('expense-currency').value; let rate=1, final=amt; if(cur==='MXN') { rate=parseFloat(document.getElementById('exchange-rate').value); final=amt/rate; } let cpt = document.getElementById('expense-concept').value; if(cpt==='Otros') { const d = document.getElementById('expense-other-desc').value.trim(); if(d) cpt=`Otros: ${d}`; } const ed = { tripId: state.currentTrip.id, userId: state.user.uid, date: document.getElementById('expense-date').value, time: document.getElementById('expense-time').value, concept: cpt, amount: amt, currency: cur, exchangeRate: rate, finalUSD: final, photoUrl: url, createdAt: serverTimestamp() }; try { await addDoc(collection(db, 'gastos_simples'), ed); app.backToTrip(); } catch(er) { app.showAlert("Error", "Failed."); } finally { app.hideLoader(); } },
-            listenToExpenses: (tid) => { const q = query(collection(db, 'gastos_simples'), where("tripId","==",tid), where("userId","==",state.user.uid)); onSnapshot(q, (s) => { state.expenses=[]; s.forEach(d=>state.expenses.push({id:d.id, ...d.data()})); state.expenses.sort((a,b)=>new Date(b.date)-new Date(a.date)); app.renderExpenses(); }); },
-            renderExpenses: () => { const c = document.getElementById('expenses-list'); c.innerHTML=''; let t=0; state.expenses.forEach(e=>{ t+=e.finalUSD; let i='fa-receipt'; if(e.concept.includes('Alimentos')) i='fa-burger'; else if(e.concept.includes('Gasolina')) i='fa-gas-pump'; else if(e.concept.includes('Hospedaje')) i='fa-hotel'; else if(e.concept.includes('Transporte')||e.concept.includes('Uber')||e.concept.includes('Taxi')) i='fa-car'; else if(e.concept.includes('avión')||e.concept.includes('Renta')) i='fa-plane'; const tc = app.translateConcept(e.concept); const el=document.createElement('div'); el.className='bg-white p-3 rounded-lg shadow-sm flex justify-between items-center border-l-4 border-blue-500'; const deleteBtn = `<button onclick="app.promptDeleteExpense('${e.id}')" class="ml-3 text-gray-300 hover:text-red-500 transition p-2"><i class="fa-solid fa-trash-can"></i></button>`; el.innerHTML=`<div class="flex items-center gap-3"><div class="bg-blue-50 p-2 rounded-full text-blue-600 w-10 h-10 flex items-center justify-center"><i class="fa-solid ${i}"></i></div><div><p class="font-bold text-gray-800">${tc}</p><p class="text-xs text-gray-500">${e.date}</p></div></div><div class="flex items-center"><div class="text-right"><p class="font-bold text-gray-900">$${e.finalUSD.toFixed(2)} USD</p><p class="text-xs text-gray-400">(${e.amount} ${e.currency})</p>${e.photoUrl?`<a href="${e.photoUrl}" target="_blank" class="text-xs text-blue-500 underline"><i class="fa-solid fa-paperclip"></i></a>`:''}</div><button onclick="app.promptDeleteExpense('${e.id}')" class="ml-3 text-gray-300 hover:text-red-500 transition p-2"><i class="fa-solid fa-trash-can"></i></button></div>`; c.appendChild(el); }); document.getElementById('header-total-usd').innerText=`$${t.toFixed(2)} USD`; },
-            generateReport: () => { app.showView('view-report'); document.getElementById('ai-insights-container').classList.add('hidden'); document.getElementById('report-client').innerHTML=`${state.currentTrip.client}<br><span class="text-xs text-gray-500">${state.currentTrip.city||''}</span>`; document.getElementById('report-date').innerText=state.currentTrip.startDate; document.getElementById('report-exp-code').innerText=state.currentTrip.expCode; document.getElementById('report-payment').innerText=state.currentTrip.payment||"FLEXOWASH LLC"; document.getElementById('report-watermark').classList.toggle('hidden', state.currentTrip.status!=='archived'); document.getElementById('report-single-badge').classList.toggle('hidden', !state.currentTrip.isSingle); const tb = document.getElementById('report-table-body'); tb.innerHTML=''; const exps = [...state.expenses].reverse(); let rP=0, rU=0, aU=0; exps.forEach(e=>{ if(e.currency==='MXN'){rP+=e.amount; aU+=e.finalUSD;} else {rU+=e.amount;} const tr=document.createElement('tr'); tr.className='bg-white border-b hover:bg-gray-50'; tr.innerHTML=`<td class="px-2 py-2 font-medium text-gray-900 whitespace-nowrap">${e.date}</td><td class="px-2 py-2">${app.translateConcept(e.concept)}</td><td class="px-2 py-2 text-right text-gray-600">$${e.amount} <span class="text-[10px] font-bold">${e.currency}</span></td><td class="px-2 py-2 text-center text-xs">${e.currency==='MXN'?e.exchangeRate.toFixed(2):'-'}</td><td class="px-2 py-2 text-right font-mono font-bold text-green-700">$${e.finalUSD.toFixed(2)}</td>`; tb.appendChild(tr); }); document.getElementById('report-real-mxn').innerText=`$${rP.toFixed(2)} MXN`; document.getElementById('report-real-usd').innerText=`$${rU.toFixed(2)} USD`; document.getElementById('report-final-usd-real').innerText=`$${rU.toFixed(2)}`; document.getElementById('report-final-usd-approx').innerText=`$${aU.toFixed(2)}`; const gt=rU+aU; document.getElementById('report-subtotal-grand').innerText=`$${gt.toFixed(2)} USD`; if(state.currentTrip.payment==='Customer'){ const s=gt*0.15; const f=gt+s; document.getElementById('report-surcharge').innerText=`$${s.toFixed(2)}`; document.getElementById('report-final-bill').innerText=`$${f.toFixed(2)} USD`; document.getElementById('customer-surcharge-row').classList.remove('hidden'); document.getElementById('standard-total-row').classList.add('hidden'); } else { document.getElementById('customer-surcharge-row').classList.add('hidden'); document.getElementById('standard-total-row').classList.remove('hidden'); document.getElementById('report-grand-total').innerText=`$${gt.toFixed(2)} USD`; } },
+            handleFileSelect: (input) => {
+                if (input.files && input.files[0]) {
+                    const file = input.files[0];
+                    state.currentFile = file;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        document.getElementById('image-preview').src = e.target.result;
+                        document.getElementById('image-preview').classList.remove('hidden');
+                        document.getElementById('preview-container').classList.add('hidden');
+                        state.base64Image = e.target.result.split(',')[1];
+                        document.getElementById('btn-analyze-ticket').classList.remove('hidden');
+                    }
+                    reader.readAsDataURL(file);
+                }
+            },
+            analyzeTicketWithGemini: async () => {
+                if (!state.base64Image) return app.showAlert("Error", "Selecciona una foto.");
+                const btn = document.getElementById('btn-analyze-ticket');
+                btn.disabled = true; btn.innerHTML = "Analizando...";
+                try {
+                    if(!apiKey) throw new Error("API Key missing");
+                    const prompt = `Analiza imagen ticket... responde JSON: {"date":"YYYY-MM-DD","time":"HH:MM","amount":0.00,"currency":"MXN","concept":"Alimentos"}`;
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({contents:[{parts:[{text:p},{inlineData:{mimeType:"image/jpeg",data:state.base64Image}}]}]}) });
+                    const data = await response.json();
+                    const cleanJson = data.candidates[0].content.parts[0].text.replace(/```json|```/g,'').trim();
+                    const result = JSON.parse(cleanJson);
+                    if (result.date) document.getElementById('expense-date').value = result.date;
+                    if (result.time) document.getElementById('expense-time').value = result.time;
+                    if (result.amount) document.getElementById('expense-amount').value = result.amount;
+                    if (result.currency) {
+                        document.getElementById('expense-currency').value = result.currency;
+                        app.toggleExchangeRate();
+                    }
+                    if (result.concept) document.getElementById('expense-concept').value = result.concept;
+                    app.calculatePreview();
+                } catch (error) { app.showAlert("Error IA", error.message); } finally { btn.disabled = false; btn.innerHTML = "✨ IA"; }
+            },
+            getTripInsights: async () => {
+                if(!apiKey) return;
+                document.getElementById('ai-insights-container').classList.remove('hidden');
+                document.getElementById('ai-insights-text').innerText = "Auditando...";
+                try {
+                    const expensesSummary = state.expenses.map(e => `${e.concept}: $${e.finalUSD.toFixed(2)}`).join('\n');
+                    const prompt = `Analiza gastos breves: ${expensesSummary}`;
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({contents:[{parts:[{text:p}]}]}) });
+                    const data = await response.json();
+                    document.getElementById('ai-insights-text').innerText = data.candidates[0].content.parts[0].text;
+                } catch (e) { document.getElementById('ai-insights-text').innerText = "Error IA."; }
+            },
+            uploadToDropbox: async (file) => {
+                if (!state.dropboxToken) return null;
+                try {
+                    document.getElementById('upload-status').classList.remove('hidden');
+                    const dbx = new Dropbox.Dropbox({ accessToken: state.dropboxToken });
+                    const tripCode = state.currentTrip.expCode || 'SIN-CODIGO';
+                    const consecutive = state.expenses.length + 1;
+                    const extension = file.name.split('.').pop();
+                    const finalName = `${tripCode}-${consecutive}.${extension}`;
+                    const fileName = `/gastos_app/${finalName}`;
+                    const response = await dbx.filesUpload({ path: fileName, contents: file });
+                    const share = await dbx.sharingCreateSharedLinkWithSettings({ path: response.result.path_lower });
+                    return share.result.url;
+                } catch (error) { return null; }
+            },
+            saveExpense: async (e) => {
+                e.preventDefault();
+                app.showLoader("Saving...");
+                let url = "";
+                if (state.currentFile && state.dropboxToken) url = await app.uploadToDropbox(state.currentFile) || "";
+                else if (state.currentFile) url = "https://placehold.co/600x400/orange/white?text=Foto+Local";
+                const amount = parseFloat(document.getElementById('expense-amount').value);
+                const currency = document.getElementById('expense-currency').value;
+                let rate = 1;
+                let finalUSD = amount;
+                if(currency === 'MXN') {
+                    rate = parseFloat(document.getElementById('exchange-rate').value);
+                    finalUSD = amount / rate;
+                }
+                let concept = document.getElementById('expense-concept').value;
+                if (concept === 'Otros') {
+                    const desc = document.getElementById('expense-other-desc').value.trim();
+                    if (desc) concept = `Otros: ${desc}`;
+                }
+                const expenseData = {
+                    tripId: state.currentTrip.id,
+                    userId: state.user.uid,
+                    date: document.getElementById('expense-date').value,
+                    time: document.getElementById('expense-time').value,
+                    concept: concept,
+                    amount: amount,
+                    currency: currency,
+                    exchangeRate: rate,
+                    finalUSD: finalUSD,
+                    photoUrl: url,
+                    createdAt: serverTimestamp()
+                };
+                try {
+                    await addDoc(collection(db, 'gastos_simples'), expenseData);
+                    app.backToTrip();
+                } catch (err) { app.showAlert("Error", "Failed."); } finally { app.hideLoader(); }
+            },
+            listenToExpenses: (tid) => {
+                const q = query(collection(db, 'gastos_simples'), where("tripId","==",tid), where("userId","==",state.user.uid));
+                onSnapshot(q, (s) => {
+                    state.expenses = [];
+                    s.forEach(d => state.expenses.push({id:d.id, ...d.data()}));
+                    state.expenses.sort((a,b) => new Date(b.date) - new Date(a.date));
+                    app.renderExpenses();
+                });
+            },
+            renderExpenses: () => {
+                const c = document.getElementById('expenses-list');
+                c.innerHTML = '';
+                let t = 0;
+                state.expenses.forEach(e => {
+                    t += e.finalUSD;
+                    let i = 'fa-receipt';
+                    if (e.concept.includes('Alimentos')) i = 'fa-burger';
+                    else if (e.concept.includes('Gasolina')) i = 'fa-gas-pump';
+                    else if (e.concept.includes('Hospedaje')) i = 'fa-hotel';
+                    else if (e.concept.includes('Transporte') || e.concept.includes('Uber') || e.concept.includes('Taxi')) i = 'fa-car';
+                    else if (e.concept.includes('avión') || e.concept.includes('Renta')) i = 'fa-plane';
+                    const el = document.createElement('div');
+                    el.className = 'bg-white p-3 rounded-lg shadow-sm flex justify-between items-center border-l-4 border-blue-500';
+                    const deleteBtn = `<button onclick="app.promptDeleteExpense('${e.id}')" class="ml-3 text-gray-300 hover:text-red-500 transition p-2"><i class="fa-solid fa-trash-can"></i></button>`;
+                    el.innerHTML = `<div class="flex items-center gap-3"><div class="bg-blue-50 p-2 rounded-full text-blue-600 w-10 h-10 flex items-center justify-center"><i class="fa-solid ${i}"></i></div><div><p class="font-bold text-gray-800">${e.concept}</p><p class="text-xs text-gray-500">${e.date}</p></div></div><div class="flex items-center"><div class="text-right"><p class="font-bold text-gray-900">$${e.finalUSD.toFixed(2)} USD</p><p class="text-xs text-gray-400">(${e.amount} ${e.currency})</p>${e.photoUrl ? `<a href="${e.photoUrl}" target="_blank" class="text-xs text-blue-500 underline"><i class="fa-solid fa-paperclip"></i></a>` : ''}</div><button onclick="app.promptDeleteExpense('${e.id}')" class="ml-3 text-gray-300 hover:text-red-500 transition p-2"><i class="fa-solid fa-trash-can"></i></button></div>`;
+                    c.appendChild(el);
+                });
+                document.getElementById('header-total-usd').innerText = `$${t.toFixed(2)} USD`;
+            },
+            generateReport: () => {
+                app.showView('view-report');
+                document.getElementById('ai-insights-container').classList.add('hidden');
+                document.getElementById('report-client').innerHTML = `${state.currentTrip.client}<br><span class="text-xs text-gray-500">${state.currentTrip.city || ''}</span>`;
+                document.getElementById('report-date').innerText = state.currentTrip.startDate;
+                document.getElementById('report-exp-code').innerText = state.currentTrip.expCode;
+                const paymentType = state.currentTrip.payment || "FLEXOWASH LLC";
+                document.getElementById('report-payment').innerText = paymentType;
+                if (state.currentTrip.status === 'archived') document.getElementById('report-watermark').classList.remove('hidden');
+                else document.getElementById('report-watermark').classList.add('hidden');
+                if (state.currentTrip.isSingle) document.getElementById('report-single-badge').classList.remove('hidden');
+                else document.getElementById('report-single-badge').classList.add('hidden');
+                const tb = document.getElementById('report-table-body');
+                tb.innerHTML = '';
+                const exps = [...state.expenses].reverse();
+                let rP = 0, rU = 0, aU = 0;
+                exps.forEach(e => {
+                    if (e.currency === 'MXN') { rP += e.amount; aU += e.finalUSD; } else { rU += e.amount; }
+                    const tr = document.createElement('tr');
+                    tr.className = 'bg-white border-b hover:bg-gray-50';
+                    tr.innerHTML = `<td class="px-2 py-2 font-medium text-gray-900 whitespace-nowrap">${e.date}</td><td class="px-2 py-2">${e.concept}</td><td class="px-2 py-2 text-right text-gray-600">$${e.amount} <span class="text-[10px] font-bold">${e.currency}</span></td><td class="px-2 py-2 text-center text-xs">${e.currency === 'MXN' ? e.exchangeRate.toFixed(2) : '-'}</td><td class="px-2 py-2 text-right font-mono font-bold text-green-700">$${e.finalUSD.toFixed(2)}</td>`;
+                    tb.appendChild(tr);
+                });
+                document.getElementById('report-real-mxn').innerText = `$${rP.toFixed(2)} MXN`;
+                document.getElementById('report-real-usd').innerText = `$${rU.toFixed(2)} USD`;
+                document.getElementById('report-final-usd-real').innerText = `$${rU.toFixed(2)}`;
+                document.getElementById('report-final-usd-approx').innerText = `$${aU.toFixed(2)}`;
+                const gt = rU + aU;
+                document.getElementById('report-subtotal-grand').innerText = `$${gt.toFixed(2)} USD`;
+                if (state.currentTrip.payment === 'Customer') {
+                    const s = gt * 0.15;
+                    const f = gt + s;
+                    document.getElementById('report-surcharge').innerText = `$${s.toFixed(2)}`;
+                    document.getElementById('report-final-bill').innerText = `$${f.toFixed(2)} USD`;
+                    document.getElementById('customer-surcharge-row').classList.remove('hidden');
+                    document.getElementById('standard-total-row').classList.add('hidden');
+                } else {
+                    document.getElementById('customer-surcharge-row').classList.add('hidden');
+                    document.getElementById('standard-total-row').classList.remove('hidden');
+                    document.getElementById('report-grand-total').innerText = `$${gt.toFixed(2)} USD`;
+                }
+            },
             printReport: () => { window.print(); },
-            renderDashboard: () => { const ac = document.getElementById('trips-list'); const arc = document.getElementById('archived-trips-list'); if(!ac) return; ac.innerHTML=''; arc.innerHTML=''; const ts = [...state.allTrips].sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)); if(ts.length===0) ac.innerHTML=`<div class="col-span-full text-center text-gray-500 mt-10">${app.t('no_closed_trips')}</div>`; let hA=false; ts.forEach(d=>{ const p=d.payment||'FLEXOWASH LLC'; let badgeClass = "bg-blue-100 text-blue-800"; if(p==='FLEXOWASH APS') badgeClass = "bg-red-100 text-red-800"; if(p==='Customer') badgeClass = "bg-green-100 text-green-800"; const t = state.tripTotals[d.id]||0; let singleTag = d.isSingle ? `<span class="bg-purple-100 text-purple-800 text-[10px] px-2 py-0.5 rounded-full font-bold ml-2">${app.t('badge_single')}</span>` : ''; const c = document.createElement('div'); c.className='bg-white p-5 rounded-xl shadow hover:shadow-md transition cursor-pointer border border-transparent hover:border-orange-300 relative'; c.onclick=()=>app.selectTrip(d); c.innerHTML=`<span class="absolute top-2 right-2 text-[10px] font-mono bg-gray-100 px-1 rounded text-gray-500">${d.expCode||''}</span><div class="flex flex-col justify-between items-start mb-2 mt-2"><h3 class="font-bold text-lg text-gray-800 truncate w-full">${d.client}</h3><p class="text-xs text-gray-500 font-semibold uppercase"><i class="fa-solid fa-location-dot mr-1"></i> ${d.city||''}</p></div><p class="text-sm text-gray-500 flex items-center mt-1"><i class="fa-regular fa-calendar mr-1"></i> ${d.startDate} ${singleTag}</p><div class="mt-4 flex justify-between items-end"><span class="${badgeClass} text-xs px-2 py-1 rounded-full font-bold uppercase">${p}</span><span class="text-sm font-bold text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100">$${t.toFixed(2)} USD</span></div>`; if(d.status==='archived'){hA=true; c.classList.add('opacity-75','grayscale-[0.5]'); arc.appendChild(c);} else {ac.appendChild(c);} }); if(!hA) arc.innerHTML=`<div class="text-sm text-gray-400 italic col-span-full text-center">${app.t('no_closed_trips')}</div>`; }
+            renderDashboard: () => {
+                const ac = document.getElementById('trips-list');
+                const arc = document.getElementById('archived-trips-list');
+                if (!ac || !arc) return;
+                ac.innerHTML = ''; arc.innerHTML = '';
+                const trips = [...state.allTrips].sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                if (trips.length === 0) ac.innerHTML = `<div class="col-span-full text-center text-gray-500 mt-10">No hay viajes registrados.</div>`;
+                let hA = false;
+                trips.forEach(d => {
+                    const p = d.payment || 'FLEXOWASH LLC';
+                    let badgeClass = "bg-blue-100 text-blue-800";
+                    if (p === 'FLEXOWASH APS') badgeClass = "bg-red-100 text-red-800";
+                    if (p === 'Customer') badgeClass = "bg-green-100 text-green-800";
+                    const t = state.tripTotals[d.id] || 0;
+                    let singleTag = d.isSingle ? `<span class="bg-purple-100 text-purple-800 text-[10px] px-2 py-0.5 rounded-full font-bold ml-2">ÚNICO</span>` : '';
+                    const c = document.createElement('div');
+                    c.className = 'bg-white p-5 rounded-xl shadow hover:shadow-md transition cursor-pointer border border-transparent hover:border-orange-300 relative';
+                    c.onclick = () => app.selectTrip(d);
+                    c.innerHTML = `<span class="absolute top-2 right-2 text-[10px] font-mono bg-gray-100 px-1 rounded text-gray-500">${d.expCode || ''}</span><div class="flex flex-col justify-between items-start mb-2 mt-2"><h3 class="font-bold text-lg text-gray-800 truncate w-full">${d.client}</h3><p class="text-xs text-gray-500 font-semibold uppercase"><i class="fa-solid fa-location-dot mr-1"></i> ${d.city || ''}</p></div><p class="text-sm text-gray-500 flex items-center mt-1"><i class="fa-regular fa-calendar mr-1"></i> ${d.startDate} ${singleTag}</p><div class="mt-4 flex justify-between items-end"><span class="${badgeClass} text-xs px-2 py-1 rounded-full font-bold uppercase">${p}</span><span class="text-sm font-bold text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100">$${t.toFixed(2)} USD</span></div>`;
+                    if (d.status === 'archived') { hA = true; c.classList.add('opacity-75', 'grayscale-[0.5]'); arc.appendChild(c); }
+                    else { ac.appendChild(c); }
+                });
+                if (!hA) arc.innerHTML = `<div class="text-sm text-gray-400 italic col-span-full text-center">No hay viajes cerrados recientes.</div>`;
+            }
         };
 
-        // --- MANEJO DEL RETORNO DE DROPBOX ---
-        const urlParams = new URLSearchParams(window.location.search);
-        const code = urlParams.get('code');
-        
-        if (code && sessionStorage.getItem('dbx_auth_pending')) {
-            sessionStorage.removeItem('dbx_auth_pending');
-            window.history.replaceState({}, document.title, REDIRECT_URI);
-            
-            // 1. Primero aseguramos que Dropbox se conecte
-            const dbxAuth = new Dropbox.DropboxAuth({ clientId: state.dbxAppKey });
-            app.showLoader("Conectando Dropbox...");
-            
-            dbxAuth.getAccessTokenFromCode(REDIRECT_URI, code)
-                .then((response) => {
-                    const refreshToken = response.result.refresh_token;
-                    if (refreshToken) {
-                        localStorage.setItem('dbx_refresh_token', refreshToken);
-                        state.dbxRefreshToken = refreshToken;
-                        state.dbxAccessToken = response.result.access_token;
-                        // 2. Mostrar mensaje de éxito
-                        document.getElementById('dropbox-return-msg').classList.remove('hidden');
-                    }
-                })
-                .catch((error) => {
-                    alert("Error conectando Dropbox: " + JSON.stringify(error));
-                })
-                .finally(() => {
-                    app.hideLoader();
-                    // Forzar pantalla de login porque el redirect borró la sesión de Firebase
-                    document.getElementById('login-screen').classList.remove('hidden');
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                state.user = user;
+                document.getElementById('login-screen').classList.add('hidden');
+                const username = user.email.split('@')[0].toUpperCase();
+                document.getElementById('connection-status').innerText = "User: " + username;
+                document.getElementById('user-email-display').innerText = username;
+                const qTrips = query(collection(db, 'viajes_simples'), where('userId', '==', user.uid));
+                onSnapshot(qTrips, s => { state.allTrips = []; s.forEach(d => state.allTrips.push({ id: d.id, ...d.data() })); app.renderDashboard(); });
+                const qExpenses = query(collection(db, 'gastos_simples'), where('userId', '==', user.uid));
+                onSnapshot(qExpenses, s => {
+                    state.tripTotals = {};
+                    s.forEach(d => {
+                        const e = d.data();
+                        if (!state.tripTotals[e.tripId]) state.tripTotals[e.tripId] = 0;
+                        state.tripTotals[e.tripId] += (e.finalUSD || 0);
+                    });
+                    app.renderDashboard();
                 });
-        } else {
-             // Flujo normal
-             onAuthStateChanged(auth, (user) => {
-                if(user) {
-                    state.user = user;
-                    document.getElementById('login-screen').classList.add('hidden');
-                    const username = user.email.split('@')[0].toUpperCase();
-                    document.getElementById('connection-status').innerText = "User: " + username;
-                    document.getElementById('user-email-display').innerText = username;
-                    
-                    // Cargar datos
-                    const qTrips = query(collection(db, 'viajes_simples'), where('userId', '==', user.uid));
-                    onSnapshot(qTrips, s => {
-                        state.allTrips = [];
-                        s.forEach(d => state.allTrips.push({id: d.id, ...d.data()}));
-                        app.renderDashboard();
-                    });
-
-                    const qExpenses = query(collection(db, 'gastos_simples'), where('userId', '==', user.uid));
-                    onSnapshot(qExpenses, s => {
-                        state.tripTotals = {};
-                        s.forEach(d => {
-                            const expense = d.data();
-                            const tripId = expense.tripId;
-                            if (!state.tripTotals[tripId]) state.tripTotals[tripId] = 0;
-                            state.tripTotals[tripId] += (expense.finalUSD || 0);
-                        });
-                        app.renderDashboard();
-                    });
-                } else {
-                    document.getElementById('login-screen').classList.remove('hidden');
-                }
-            });
-        }
-
-        app.updateTranslations();
+            } else {
+                document.getElementById('login-screen').classList.remove('hidden');
+            }
+        });
 
     </script>
 </body>
 </html>
+
+
