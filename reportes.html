@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Reportes - A-LAS DE BARRIL</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Fuentes Retro -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&family=Special+Elite&display=swap" rel="stylesheet">
+
+    <style>
+        /* Estilos Rústicos Compartidos */
+        body { 
+            font-family: 'Old Standard TT', serif;
+            background-color: #f8f1e5;
+            color: #451a03;
+            background-image: 
+                linear-gradient(to right, rgba(92, 64, 51, 0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(92, 64, 51, 0.05) 1px, transparent 1px);
+            background-size: 20px 20px;
+            /* Se eliminó user-select: none para permitir edición de inputs */
+        }
+        
+        h1, h2, h3, .font-title { font-family: 'Abril Fatface', cursive; letter-spacing: 0.05em; }
+        .font-mono-retro { font-family: 'Special Elite', cursive; }
+
+        /* Botones Retro */
+        .btn-retro {
+            @apply py-2 px-4 rounded-sm font-bold text-white shadow-md uppercase tracking-wide border-2 border-[#2c1e16] transition-all cursor-pointer;
+            box-shadow: 3px 3px 0 #2c1e16;
+            font-family: 'Abril Fatface', cursive;
+        }
+        .btn-retro:active { box-shadow: 1px 1px 0 #2c1e16; transform: translate(2px, 2px); }
+        .btn-blue { background-color: #4a6fa5; }
+        .btn-green { background-color: #557b55; }
+
+        /* Tarjetas de Reporte */
+        .report-card {
+            @apply bg-[#fffdf9] p-4 rounded-sm border-2 border-[#5c4033] relative overflow-hidden;
+            box-shadow: 4px 4px 0 rgba(92, 64, 51, 0.15);
+        }
+
+        /* INPUTS DE FECHA Y HORA CORREGIDOS */
+        input[type="datetime-local"] {
+            @apply border-2 border-[#a89f91] p-3 rounded-sm text-[#5c4033] bg-white outline-none font-bold w-full text-lg shadow-inner;
+            font-family: sans-serif !important; /* Forzar fuente del sistema para el selector nativo */
+            color-scheme: light; /* Asegura buen contraste */
+            cursor: text;
+            appearance: none;
+        }
+        
+        /* Asegurar interacción */
+        input, select, textarea, button {
+            pointer-events: auto !important;
+            user-select: auto !important;
+            -webkit-user-select: auto !important;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <!-- Header -->
+    <header class="bg-[#2c1e16] text-[#f8f1e5] p-4 shadow-md flex justify-between items-center border-b-[6px] double border-[#5c4033] shrink-0">
+        <div class="flex items-center gap-3">
+            <i class="fa-solid fa-chart-pie text-2xl text-[#d4a353]"></i>
+            <h1 class="text-xl md:text-2xl">REPORTE DE VENTAS</h1>
+        </div>
+        <!-- Enlace para regresar al archivo index.html -->
+        <a href="index.html" class="text-xs bg-[#5c4033] border-2 border-[#f8f1e5] px-3 py-1.5 rounded-sm hover:bg-[#4a3328] uppercase font-bold tracking-wider text-[#f8f1e5] no-underline flex items-center gap-2 cursor-pointer">
+            <i class="fa-solid fa-arrow-left"></i> Volver al POS
+        </a>
+    </header>
+
+    <!-- Contenido Principal -->
+    <main class="flex-1 overflow-y-auto p-4 md:p-8">
+        
+        <!-- Filtros de Fecha y Hora -->
+        <div class="max-w-5xl mx-auto mb-8">
+            <div class="report-card bg-[#e0d8c8] flex flex-col md:flex-row gap-6 items-end md:items-center justify-between p-6">
+                <div class="flex flex-col md:flex-row gap-4 w-full md:w-auto flex-1">
+                    <div class="flex flex-col gap-2 flex-1">
+                        <label class="text-xs font-bold uppercase text-[#5c4033] tracking-wide"><i class="fa-regular fa-calendar"></i> Inicio (Fecha y Hora)</label>
+                        <!-- step="60" permite seleccionar minutos -->
+                        <input type="datetime-local" id="date-start" step="60">
+                    </div>
+                    <div class="flex flex-col gap-2 flex-1">
+                        <label class="text-xs font-bold uppercase text-[#5c4033] tracking-wide"><i class="fa-regular fa-clock"></i> Cierre (Fecha y Hora)</label>
+                        <input type="datetime-local" id="date-end" step="60">
+                    </div>
+                </div>
+                <button onclick="generateReport()" class="btn-retro btn-blue w-full md:w-auto py-3 px-6 text-lg"><i class="fa-solid fa-filter mr-2"></i> Generar Reporte</button>
+            </div>
+        </div>
+
+        <!-- Estado de Carga -->
+        <div id="loading" class="hidden text-center py-10">
+            <i class="fa-solid fa-circle-notch fa-spin text-4xl text-[#5c4033]"></i>
+            <p class="mt-2 font-mono-retro">Calculando ventas...</p>
+        </div>
+
+        <!-- Resultados -->
+        <div id="report-content" class="max-w-5xl mx-auto hidden space-y-6 pb-10">
+            
+            <!-- Tarjetas de Totales -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Total General -->
+                <div class="report-card bg-[#fff0e6] border-[#cba135]">
+                    <h3 class="text-[#a63e3e] text-sm uppercase mb-1 font-bold">Venta Total</h3>
+                    <div class="text-4xl font-black text-[#2c1e16] font-mono-retro" id="total-sales">$0.00</div>
+                    <div class="text-xs text-[#5c4033] mt-2 font-bold"><span id="total-orders">0</span> artículos vendidos</div>
+                    <i class="fa-solid fa-cash-register absolute -bottom-2 -right-2 text-7xl text-[#a63e3e] opacity-10"></i>
+                </div>
+
+                <!-- Total Cocina -->
+                <div class="report-card">
+                    <h3 class="text-[#d4a353] text-sm uppercase mb-1 font-bold">Cocina (Alimentos)</h3>
+                    <div class="text-3xl font-black text-[#5c4033] font-mono-retro" id="kitchen-sales">$0.00</div>
+                    <div class="w-full bg-[#e0d8c8] h-3 rounded-full mt-3 overflow-hidden border border-[#a89f91]">
+                        <div id="kitchen-bar" class="bg-[#d4a353] h-full" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Total Barra -->
+                <div class="report-card">
+                    <h3 class="text-[#4a6fa5] text-sm uppercase mb-1 font-bold">Barra (Bebidas)</h3>
+                    <div class="text-3xl font-black text-[#5c4033] font-mono-retro" id="bar-sales">$0.00</div>
+                    <div class="w-full bg-[#e0d8c8] h-3 rounded-full mt-3 overflow-hidden border border-[#a89f91]">
+                        <div id="bar-bar" class="bg-[#4a6fa5] h-full" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tablas de Detalle -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Top Productos -->
+                <div class="report-card">
+                    <h3 class="text-xl mb-4 border-b-2 border-[#a89f91] pb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-ranking-star text-[#cba135]"></i> Productos Más Vendidos
+                    </h3>
+                    <div class="overflow-y-auto max-h-96 pr-2">
+                        <table class="w-full text-sm text-left border-collapse">
+                            <thead class="text-xs text-[#a89f91] uppercase bg-[#fffdf9] border-b-2 border-[#a89f91] sticky top-0">
+                                <tr>
+                                    <th class="py-2">Producto</th>
+                                    <th class="py-2 text-right">Cant.</th>
+                                    <th class="py-2 text-right">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="top-products-body" class="font-mono-retro text-[#5c4033]">
+                                <!-- JS llena esto -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Métricas Extra -->
+                <div class="space-y-4">
+                    <!-- Ticket Promedio -->
+                    <div class="report-card flex items-center justify-between">
+                        <div>
+                            <h4 class="text-xs font-bold uppercase text-[#a89f91]">Pago en Efectivo (Estimado)</h4>
+                            <div class="text-xl font-bold text-[#5c4033] font-mono-retro" id="cash-estimated">$0.00</div>
+                        </div>
+                        <div class="bg-[#e0d8c8] p-4 rounded-full text-[#5c4033] text-xl border-2 border-[#a89f91]"><i class="fa-solid fa-money-bill-wave"></i></div>
+                    </div>
+                    
+                    <!-- Tarjetas -->
+                    <div class="report-card flex items-center justify-between">
+                         <div>
+                            <h4 class="text-xs font-bold uppercase text-[#a89f91]">Pago con Tarjeta (Estimado)</h4>
+                            <div class="text-xl font-bold text-[#4a6fa5] font-mono-retro" id="card-estimated">$0.00</div>
+                            <div class="text-[10px] text-[#a89f91] font-bold mt-1">*Incluye comisión +4%</div>
+                        </div>
+                        <div class="bg-[#e0f2fe] p-4 rounded-full text-[#4a6fa5] text-xl border-2 border-[#4a6fa5]"><i class="fa-solid fa-credit-card"></i></div>
+                    </div>
+
+                    <!-- Deudas Pendientes Globales -->
+                    <div class="report-card border-[#a63e3e] bg-[#fce8e8]">
+                         <div class="flex justify-between items-center">
+                             <div>
+                                 <h4 class="text-xs font-bold uppercase text-[#a63e3e]">Deuda Total Pendiente</h4>
+                                 <div class="text-2xl font-black text-[#a63e3e] font-mono-retro" id="pending-debt">$0.00</div>
+                             </div>
+                             <i class="fa-solid fa-file-invoice-dollar text-4xl text-[#a63e3e] opacity-50"></i>
+                         </div>
+                         <p class="text-[11px] mt-2 text-[#a63e3e] opacity-90 font-bold border-t border-[#a63e3e]/30 pt-1">Monto actual en mesas marcadas como 'Deuda'</p>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
+
+    <script type="module">
+        // USAR VERSIÓN ESTABLE 10.13.1
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+        import { getFirestore, collection, getDocs, query, where, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+
+        // --- TU CONFIGURACIÓN DE FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyBqrR3FQ7L7KCE5Wg8thRvyA6GpiUV2DPs",
+            authDomain: "alasdebarrilwings.firebaseapp.com",
+            projectId: "alasdebarrilwings",
+            storageBucket: "alasdebarrilwings.firebasestorage.app",
+            messagingSenderId: "826542576836",
+            appId: "1:826542576836:web:dd1bc6f8bc4fd73d57a591"
+        };
+
+        let app, auth, db;
+
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (error) {
+            console.error("Error initializing Firebase:", error);
+            alert("Error de conexión. Verifica tu internet.");
+        }
+
+        // Inicializar fechas y HORAS (Hoy 00:00 a 23:59) con formato local ISO
+        const now = new Date();
+        const offsetMs = now.getTimezoneOffset() * 60000; 
+        
+        const startOfDay = new Date(now.setHours(0, 0, 0, 0) - offsetMs).toISOString().slice(0, 16);
+        const endOfDay = new Date(now.setHours(23, 59, 59, 999) - offsetMs).toISOString().slice(0, 16);
+
+        document.getElementById('date-start').value = startOfDay;
+        document.getElementById('date-end').value = endOfDay;
+
+        // Autenticación anónima
+        signInAnonymously(auth).catch((error) => {
+            console.error("Error de autenticación:", error);
+        });
+
+        window.generateReport = async () => {
+            const startVal = document.getElementById('date-start').value;
+            const endVal = document.getElementById('date-end').value;
+            
+            if(!startVal || !endVal) return alert("Selecciona ambas fechas y horas");
+
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('report-content').classList.add('hidden');
+
+            const startDate = new Date(startVal);
+            const endDate = new Date(endVal);
+
+            try {
+                const q = query(collection(db, 'orders')); 
+                const snapshot = await getDocs(q);
+                
+                let totalSales = 0;
+                let kitchenSales = 0;
+                let barSales = 0;
+                let itemCount = 0;
+                const productStats = {};
+
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const time = data.timestamp?.toDate();
+
+                    // Filtrar por RANGO DE TIEMPO EXACTO y estado
+                    if (time >= startDate && time <= endDate && data.status !== 'cancelled') {
+                        const amount = (data.price || 0) * (data.quantity || 1);
+                        
+                        totalSales += amount;
+                        itemCount += (data.quantity || 1);
+
+                        if (data.category === 'kitchen') kitchenSales += amount;
+                        else if (data.category === 'bar') barSales += amount;
+
+                        if (!productStats[data.itemName]) {
+                            productStats[data.itemName] = { qty: 0, total: 0 };
+                        }
+                        productStats[data.itemName].qty += (data.quantity || 1);
+                        productStats[data.itemName].total += amount;
+                    }
+                });
+
+                const tablesQ = query(collection(db, 'tables'), where('status', '==', 'debt'));
+                const tablesSnap = await getDocs(tablesQ);
+
+                // Renderizar
+                document.getElementById('total-sales').innerText = formatMoney(totalSales);
+                document.getElementById('total-orders').innerText = itemCount;
+                
+                document.getElementById('kitchen-sales').innerText = formatMoney(kitchenSales);
+                document.getElementById('bar-sales').innerText = formatMoney(barSales);
+
+                const kitchenPct = totalSales > 0 ? (kitchenSales / totalSales) * 100 : 0;
+                const barPct = totalSales > 0 ? (barSales / totalSales) * 100 : 0;
+                document.getElementById('kitchen-bar').style.width = `${kitchenPct}%`;
+                document.getElementById('bar-bar').style.width = `${barPct}%`;
+
+                const sortedProducts = Object.entries(productStats)
+                    .sort(([,a], [,b]) => b.qty - a.qty)
+                    .slice(0, 10); 
+
+                const tbody = document.getElementById('top-products-body');
+                tbody.innerHTML = sortedProducts.map(([name, stat]) => `
+                    <tr class="border-b border-[#e0d8c8] last:border-0 hover:bg-[#fff0e6] transition">
+                        <td class="py-2 pl-2 font-bold">${name}</td>
+                        <td class="py-2 text-right font-black text-[#a63e3e]">${stat.qty}</td>
+                        <td class="py-2 text-right pr-2">${formatMoney(stat.total)}</td>
+                    </tr>
+                `).join('');
+
+                if (tablesSnap.size > 0) {
+                    document.getElementById('pending-debt').innerText = `${tablesSnap.size} Mesas`;
+                    document.getElementById('pending-debt').classList.add('text-xl');
+                } else {
+                    document.getElementById('pending-debt').innerText = "$0.00";
+                }
+
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('report-content').classList.remove('hidden');
+
+            } catch (e) {
+                console.error(e);
+                alert("Error generando reporte: " + e.message);
+                document.getElementById('loading').classList.add('hidden');
+            }
+        };
+
+        const formatMoney = (amount) => {
+            return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(amount);
+        };
+    </script>
+</body>
+</html>
