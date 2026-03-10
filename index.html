@@ -512,12 +512,14 @@ service cloud.firestore {
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
             <h3 class="font-bold text-xl mb-4">Settings</h3>
             <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Dropbox Access Token</label>
-                <input type="password" id="dropbox-token-input" placeholder="Insert your token here" class="w-full p-2 border rounded-lg text-sm">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Dropbox App Key (Client ID)</label>
+                <input type="text" id="dropbox-app-key-input" placeholder="Insert your App Key here" class="w-full p-2 border rounded-lg text-sm mb-2">
+                <button onclick="app.authenticateDropbox()" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">
+                    Connect to Dropbox
+                </button>
             </div>
-            <div class="flex justify-end gap-2">
-                <button onclick="app.closeModals()" class="px-4 py-2 text-gray-600 rounded-lg">Close</button>
-                <button onclick="app.saveSettings()" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Save</button>
+            <div class="flex justify-end gap-2 border-t border-gray-200 pt-4">
+                <button onclick="app.closeModals()" class="px-4 py-2 text-gray-600 rounded-lg bg-gray-100 hover:bg-gray-200">Close</button>
             </div>
         </div>
     </div>
@@ -552,13 +554,38 @@ service cloud.firestore {
         const state = {
             currentTrip: null,
             expenses: [],
-            dropboxToken: localStorage.getItem('dropbox_token') || '',
+            dropboxAppKey: localStorage.getItem('dropbox_app_key') || '',
+            dropboxAccessToken: null, // Guardaremos temporalmente el token si venimos de la redirección
             currentFile: null,
             base64Image: null,
             user: null,
             allTrips: [],
             tripTotals: {} 
         };
+
+        // Función para limpiar la URL después de la autorización
+        function clearUrlAuthInfo() {
+            const url = new URL(window.location.href);
+            // Si hay parámetros de acceso en el hash (Dropbox usa implicit grant en front-end)
+            if (url.hash.includes('access_token')) {
+                // Extraer el token del hash
+                const params = new URLSearchParams(url.hash.substring(1));
+                const accessToken = params.get('access_token');
+                
+                if (accessToken) {
+                    state.dropboxAccessToken = accessToken; // Guardarlo en el estado temporal
+                    // Podríamos guardarlo en localStorage, pero OAuth implicito sugiere no hacerlo
+                    // si queremos que sea verdaderamente persistente, mejor PKCE (pero requiere server o librerías extra).
+                    // Para simplificar en cliente puro, usaremos este token hasta que recargue.
+                }
+
+                // Limpiar la URL para evitar recargas raras
+                window.history.replaceState({}, document.title, url.pathname);
+            }
+        }
+
+        // Ejecutar limpieza tan pronto cargue
+        clearUrlAuthInfo();
 
         window.app = {
             showView: (viewId) => {
@@ -567,14 +594,36 @@ service cloud.firestore {
                 window.scrollTo(0,0);
             },
             showSettings: () => {
-                document.getElementById('dropbox-token-input').value = state.dropboxToken;
+                document.getElementById('dropbox-app-key-input').value = state.dropboxAppKey;
                 document.getElementById('modal-settings').classList.remove('hidden');
             },
-            saveSettings: () => {
-                state.dropboxToken = document.getElementById('dropbox-token-input').value.trim();
-                localStorage.setItem('dropbox_token', state.dropboxToken);
-                app.closeModals();
+            
+            // Inicia el flujo OAuth de Dropbox
+            authenticateDropbox: () => {
+                const appKey = document.getElementById('dropbox-app-key-input').value.trim();
+                if (!appKey) {
+                    app.showAlert("Missing App Key", "Please enter your Dropbox App Key (Client ID) first.");
+                    return;
+                }
+                
+                // Guardar la App Key
+                localStorage.setItem('dropbox_app_key', appKey);
+                state.dropboxAppKey = appKey;
+
+                // Crear instancia del SDK Auth
+                const dbxAuth = new Dropbox.DropboxAuth({ clientId: appKey });
+                
+                // Construir URL de redirección (la actual)
+                const redirectUri = window.location.href.split('#')[0]; // Evitar hashes existentes
+
+                // Obtener URL de autorización y redirigir
+                dbxAuth.getAuthenticationUrl(redirectUri, undefined, 'token', 'offline', undefined, undefined, true)
+                  .then((authUrl) => {
+                    window.location.href = authUrl; // Redirigir al usuario
+                  })
+                  .catch((error) => console.error("Error initiating auth:", error));
             },
+
             closeModals: () => {
                 document.getElementById('modal-new-trip').classList.add('hidden');
                 document.getElementById('modal-settings').classList.add('hidden');
@@ -736,12 +785,9 @@ service cloud.firestore {
                     app.selectTrip(state.tempNewTrip);
 
                 } catch (e) {
-                    console.error("Firestore Error (Create Trip):", e);
-                    if (e.code === 'permission-denied') {
-                        document.getElementById('modal-rules-help').classList.remove('hidden');
-                    } else {
-                        app.showAlert("Error", "Could not save. Check Firebase rules.");
-                    }
+                    console.error(e);
+                    document.getElementById('rules-error-banner').classList.remove('hidden');
+                    app.showAlert("Error", "Could not save. Check Firebase rules.");
                 } finally {
                     app.hideLoader();
                 }
@@ -767,12 +813,8 @@ service cloud.firestore {
                     app.showAlert("Success", "Trip closed and archived.");
                     app.loadDashboard();
                 } catch(e) {
-                    console.error("Firestore Error (Archive Trip):", e);
-                    if (e.code === 'permission-denied') {
-                        document.getElementById('modal-rules-help').classList.remove('hidden');
-                    } else {
-                        app.showAlert("Error", "Could not archive.");
-                    }
+                    console.error(e);
+                    app.showAlert("Error", "Could not archive.");
                 } finally {
                     app.hideLoader();
                 }
@@ -796,12 +838,8 @@ service cloud.firestore {
                 try {
                     await deleteDoc(doc(db, 'gastos_simples', expenseId));
                 } catch(e) {
-                    console.error("Firestore Error (Delete Expense):", e);
-                    if (e.code === 'permission-denied') {
-                        document.getElementById('modal-rules-help').classList.remove('hidden');
-                    } else {
-                        app.showAlert("Error", "Could not delete the expense.");
-                    }
+                    console.error(e);
+                    app.showAlert("Error", "Could not delete the expense.");
                 } finally {
                     app.hideLoader();
                 }
@@ -832,12 +870,8 @@ service cloud.firestore {
                         app.selectTrip(tripData);
                     }
                 } catch(e) {
-                    console.error("Firestore Error (Search Trip):", e);
-                    if (e.code === 'permission-denied') {
-                        document.getElementById('modal-rules-help').classList.remove('hidden');
-                    } else {
-                        app.showAlert("Error", "Search failed.");
-                    }
+                    console.error(e);
+                    app.showAlert("Error", "Search failed.");
                 } finally {
                     app.hideLoader();
                 }
@@ -1034,15 +1068,15 @@ service cloud.firestore {
                 } catch (e) { document.getElementById('ai-insights-text').innerText = "AI Error."; }
             },
             uploadToDropbox: async (file) => {
-                if (!state.dropboxToken) {
-                    app.showAlert("Dropbox Error", "Missing Access Token. Please add it in Settings ⚙️.");
+                if (!state.dropboxAccessToken) {
+                    app.showAlert("Dropbox Error", "Missing Access Token. Please connect to Dropbox in Settings ⚙️.");
                     return null;
                 }
                 try {
                     document.getElementById('upload-status').classList.remove('hidden');
                     document.getElementById('upload-status').innerText = "Uploading to Dropbox...";
                     
-                    const dbx = new Dropbox.Dropbox({ accessToken: state.dropboxToken });
+                    const dbx = new Dropbox.Dropbox({ accessToken: state.dropboxAccessToken });
                     const tripCode = state.currentTrip.expCode || 'SIN-CODIGO';
                     const consecutive = state.expenses.length + 1;
                     
@@ -1060,7 +1094,7 @@ service cloud.firestore {
                     return share.result.url;
                 } catch (error) { 
                     console.error("Dropbox error:", error);
-                    app.showAlert("Dropbox Error", "Upload failed. Your token might be expired (they last 4 hours). Generate a new one.");
+                    app.showAlert("Dropbox Error", "Upload failed. Your session might be expired. Please re-connect.");
                     document.getElementById('upload-status').classList.add('hidden');
                     return null; 
                 }
@@ -1069,10 +1103,13 @@ service cloud.firestore {
                 e.preventDefault();
                 app.showLoader("Saving...");
                 let photoUrl = "";
-                if (state.currentFile && state.dropboxToken) {
+                // Verify if we have a file and an active dropbox session before uploading
+                if (state.currentFile && state.dropboxAccessToken) {
                     const url = await app.uploadToDropbox(state.currentFile);
                     if (url) photoUrl = url;
-                } else if (state.currentFile) { photoUrl = "https://placehold.co/600x400/orange/white?text=Local+Photo"; }
+                } else if (state.currentFile) { 
+                    photoUrl = "https://placehold.co/600x400/orange/white?text=Local+Photo"; 
+                }
 
                 const amount = parseFloat(document.getElementById('expense-amount').value);
                 const currency = document.getElementById('expense-currency').value;
