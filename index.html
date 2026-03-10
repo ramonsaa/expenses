@@ -288,10 +288,10 @@ service cloud.firestore {
                 <div class="mb-2">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Ticket / Receipt</label>
                     <div class="relative border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:bg-gray-50 transition cursor-pointer" id="drop-area">
-                        <input type="file" id="expense-photo" accept="image/*" capture="environment" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="app.handleFileSelect(this)">
+                        <input type="file" id="expense-photo" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="app.handleFileSelect(this)">
                         <div id="preview-container" class="flex flex-col items-center">
                             <i class="fa-solid fa-camera text-3xl text-gray-400 mb-2"></i>
-                            <p class="text-sm text-gray-500">Tap to take photo</p>
+                            <p class="text-sm text-gray-500 text-center">Tap to take or select a photo</p>
                         </div>
                         <img id="image-preview" class="hidden max-h-48 mx-auto rounded shadow-sm mt-2 object-contain">
                     </div>
@@ -394,6 +394,7 @@ service cloud.firestore {
                         <h1 class="text-3xl font-bold text-gray-900">Expense Report</h1>
                         <p class="text-sm text-gray-500 mt-1" id="report-exp-code">EXP-000000</p>
                     </div>
+                    <!-- Badges completely removed from report view header as requested -->
                 </div>
                 
                 <div class="flex justify-between mt-4 text-gray-600 mb-6">
