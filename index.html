@@ -607,6 +607,10 @@ service cloud.firestore {
                 // Obtener URL de autorización usando PKCE (responseType: 'code', tokenAccessType: 'offline')
                 dbxAuth.getAuthenticationUrl(REDIRECT_URI, undefined, 'code', 'offline', undefined, undefined, true)
                   .then((authUrl) => {
+                    // SAVE PKCE VERIFIER CRITICAL FIX
+                    const verifier = dbxAuth.codeVerifier || dbxAuth.getCodeVerifier();
+                    sessionStorage.setItem('code_verifier', verifier);
+                    
                     sessionStorage.setItem('dbx_auth_pending', 'true');
                     window.location.href = authUrl; // Redirigir a Dropbox
                   })
@@ -1407,6 +1411,8 @@ service cloud.firestore {
                 .finally(() => {
                     app.hideLoader();
                     sessionStorage.removeItem('code_verifier'); // Clean up
+                    // Clear up the code from URL 
+                    window.history.replaceState({}, document.title, REDIRECT_URI);
                 });
         }
     </script>
