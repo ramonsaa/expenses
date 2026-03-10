@@ -1367,10 +1367,15 @@ service cloud.firestore {
         // Solo si volvemos de dropbox procesamos el token
         if (code && sessionStorage.getItem('dbx_auth_pending')) {
             sessionStorage.removeItem('dbx_auth_pending');
-            // Clean up the URL right away to prevent infinite loops
-            window.history.replaceState({}, document.title, REDIRECT_URI);
             
             const dbxAuth = new Dropbox.DropboxAuth({ clientId: state.dropboxAppKey });
+            
+            // Setear el verificador PKCE desde la memoria
+            const verifier = sessionStorage.getItem('code_verifier');
+            if (verifier) {
+                dbxAuth.setCodeVerifier(verifier);
+            }
+            
             app.showLoader("Finalizing Dropbox connection...");
             
             dbxAuth.getAccessTokenFromCode(REDIRECT_URI, code)
@@ -1382,20 +1387,26 @@ service cloud.firestore {
                         state.dropboxAccessToken = response.result.access_token;
                         state.dropboxExpiresAt = Date.now() + (response.result.expires_in * 1000) - 60000;
                         
-                        // Mostramos notificación de exito
                         alert("✅ Dropbox connected successfully!");
                     } else {
                         alert("⚠️ Dropbox did not return a permanent token.");
                     }
                 })
                 .catch((error) => {
-                    alert("Error connecting Dropbox: " + JSON.stringify(error));
-                    console.error(error);
+                    console.error("Dropbox Auth Error:", error);
+                    let errorMsg = "Unknown Error";
+                    if (error.error && typeof error.error === 'string') {
+                        errorMsg = error.error;
+                    } else if (error.error && error.error.error_description) {
+                        errorMsg = error.error.error_description;
+                    } else if (error.message) {
+                        errorMsg = error.message;
+                    }
+                    alert("Error connecting Dropbox: " + errorMsg);
                 })
                 .finally(() => {
                     app.hideLoader();
-                    // Importante: No forzamos mostrar el login-screen,
-                    // Dejamos que Firebase OnAuthStateChanged lo maneje (ocultarlo o mostrarlo)
+                    sessionStorage.removeItem('code_verifier'); // Clean up
                 });
         }
     </script>
