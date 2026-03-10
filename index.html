@@ -281,7 +281,7 @@ service cloud.firestore {
                 <button onclick="app.backToTrip()" class="text-gray-500 hover:text-blue-600">
                     <i class="fa-solid fa-arrow-left text-xl"></i>
                 </button>
-                <h2 class="text-xl font-bold">Register Expense</h2>
+                <h2 class="text-xl font-bold" id="add-expense-title">Register Expense</h2>
             </div>
 
             <form id="expense-form" onsubmit="app.saveExpense(event)" class="bg-white p-5 rounded-xl shadow-sm space-y-4">
@@ -367,7 +367,7 @@ service cloud.firestore {
                 </div>
 
                 <button type="submit" id="btn-save-expense" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold shadow-lg hover:bg-blue-700 transition mt-4 flex justify-center items-center gap-2">
-                    <span>Save Expense</span>
+                    <span id="btn-save-expense-text">Save Expense</span>
                 </button>
             </form>
         </div>
@@ -394,7 +394,6 @@ service cloud.firestore {
                         <h1 class="text-3xl font-bold text-gray-900">Expense Report</h1>
                         <p class="text-sm text-gray-500 mt-1" id="report-exp-code">EXP-000000</p>
                     </div>
-                    <!-- Badges completely removed from report view header as requested -->
                 </div>
                 
                 <div class="flex justify-between mt-4 text-gray-600 mb-6">
@@ -564,7 +563,9 @@ service cloud.firestore {
             base64Image: null,
             user: null,
             allTrips: [],
-            tripTotals: {} 
+            tripTotals: {},
+            editingExpenseId: null,
+            editingExpenseOldPhoto: ""
         };
 
         window.app = {
@@ -932,22 +933,93 @@ service cloud.firestore {
                 }
             },
 
-            showAddExpense: () => {
-                document.getElementById('expense-form').reset();
-                document.getElementById('expense-date').valueAsDate = new Date();
-                document.getElementById('expense-time').value = new Date().toTimeString().slice(0,5);
-                app.fetchExchangeRate();
-                app.toggleExchangeRate();
-                app.toggleOtherDesc();
+            showAddExpense: (expenseToEdit = null) => {
+                const form = document.getElementById('expense-form');
+                form.reset();
                 state.currentFile = null;
                 state.base64Image = null;
-                document.getElementById('image-preview').classList.add('hidden');
-                document.getElementById('preview-container').classList.remove('hidden');
                 document.getElementById('upload-status').classList.add('hidden');
                 document.getElementById('ai-status').classList.add('hidden');
                 document.getElementById('btn-analyze-ticket').classList.add('hidden');
-                document.getElementById('preview-usd').innerText = "$0.00 USD";
+
+                if (expenseToEdit) {
+                    // MODO EDICIÓN
+                    state.editingExpenseId = expenseToEdit.id;
+                    state.editingExpenseOldPhoto = expenseToEdit.photoUrl || "";
+                    document.getElementById('add-expense-title').innerText = "Edit Expense";
+                    document.getElementById('btn-save-expense-text').innerText = "Update Expense";
+
+                    document.getElementById('expense-date').value = expenseToEdit.date;
+                    document.getElementById('expense-time').value = expenseToEdit.time;
+                    document.getElementById('expense-amount').value = expenseToEdit.amount;
+                    document.getElementById('expense-currency').value = expenseToEdit.currency;
+                    
+                    let baseConcept = expenseToEdit.concept;
+                    let otherDesc = "";
+                    if (baseConcept.startsWith("Others: ") || baseConcept.startsWith("Otros: ")) {
+                        baseConcept = "Others";
+                        otherDesc = expenseToEdit.concept.split(": ")[1] || "";
+                    }
+                    
+                    const selectEl = document.getElementById('expense-concept');
+                    let optionExists = Array.from(selectEl.options).some(opt => opt.value === baseConcept);
+                    
+                    if (optionExists) {
+                        selectEl.value = baseConcept;
+                    } else {
+                        selectEl.value = "Others";
+                        otherDesc = expenseToEdit.concept;
+                    }
+                    
+                    app.toggleOtherDesc();
+                    if(otherDesc) {
+                        document.getElementById('expense-other-desc').value = otherDesc;
+                    }
+
+                    if (expenseToEdit.currency === 'MXN' && expenseToEdit.exchangeRate) {
+                        document.getElementById('exchange-rate').value = expenseToEdit.exchangeRate;
+                    } else {
+                        app.fetchExchangeRate();
+                    }
+                    
+                    app.toggleExchangeRate();
+                    app.calculatePreview();
+
+                    if (expenseToEdit.photoUrl && !expenseToEdit.photoUrl.includes("placehold.co")) {
+                        document.getElementById('image-preview').src = expenseToEdit.photoUrl;
+                        document.getElementById('image-preview').classList.remove('hidden');
+                        document.getElementById('preview-container').classList.add('hidden');
+                    } else {
+                        document.getElementById('image-preview').classList.add('hidden');
+                        document.getElementById('preview-container').classList.remove('hidden');
+                    }
+                } else {
+                    // MODO CREACIÓN
+                    state.editingExpenseId = null;
+                    state.editingExpenseOldPhoto = "";
+                    document.getElementById('add-expense-title').innerText = "Register Expense";
+                    document.getElementById('btn-save-expense-text').innerText = "Save Expense";
+
+                    document.getElementById('expense-date').valueAsDate = new Date();
+                    document.getElementById('expense-time').value = new Date().toTimeString().slice(0,5);
+                    
+                    app.fetchExchangeRate();
+                    app.toggleExchangeRate();
+                    app.toggleOtherDesc();
+
+                    document.getElementById('image-preview').classList.add('hidden');
+                    document.getElementById('preview-container').classList.remove('hidden');
+                    document.getElementById('preview-usd').innerText = "$0.00 USD";
+                }
+                
                 app.showView('view-add-expense');
+            },
+
+            editExpense: (expenseId) => {
+                const expense = state.expenses.find(e => e.id === expenseId);
+                if (expense) {
+                    app.showAddExpense(expense);
+                }
             },
             
             fetchExchangeRate: async () => {
@@ -1104,10 +1176,11 @@ service cloud.firestore {
 
                     const dbx = new Dropbox.Dropbox({ auth: dbxAuth });
                     const tripCode = state.currentTrip.expCode || 'SIN-CODIGO';
-                    const consecutive = state.expenses.length + 1;
+                    // Use editing id or random string if missing to avoid overwriting existing files when editing
+                    const consecutive = state.editingExpenseId ? state.editingExpenseId.substring(0,6) : state.expenses.length + 1;
                     
                     const extension = 'jpg'; 
-                    const finalName = `${tripCode}-${consecutive}.${extension}`;
+                    const finalName = `${tripCode}-${consecutive}-${Date.now().toString().slice(-4)}.${extension}`;
                     const fileName = `/gastos_app/${finalName}`;
                     
                     const response = await dbx.filesUpload({ path: fileName, contents: file });
@@ -1128,13 +1201,13 @@ service cloud.firestore {
             saveExpense: async (e) => {
                 e.preventDefault();
                 app.showLoader("Saving...");
-                let photoUrl = "";
+                let photoUrl = state.editingExpenseOldPhoto || "";
                 
-                // Only attempt upload if there is a file and a valid refresh token connection
+                // Only attempt upload if there is a NEW file and a valid refresh token connection
                 if (state.currentFile && state.dropboxRefreshToken) {
                     const url = await app.uploadToDropbox(state.currentFile);
                     if (url) photoUrl = url;
-                } else if (state.currentFile) { 
+                } else if (state.currentFile && !photoUrl) { 
                     photoUrl = "https://placehold.co/600x400/orange/white?text=Local+Photo"; 
                 }
 
@@ -1163,11 +1236,18 @@ service cloud.firestore {
                     currency: currency,
                     exchangeRate: rate,
                     finalUSD: finalUSD,
-                    photoUrl: photoUrl,
-                    createdAt: serverTimestamp()
+                    photoUrl: photoUrl
                 };
+                
                 try {
-                    await addDoc(collection(db, 'gastos_simples'), expenseData);
+                    if (state.editingExpenseId) {
+                        // Modo Edición
+                        await updateDoc(doc(db, 'gastos_simples', state.editingExpenseId), expenseData);
+                    } else {
+                        // Modo Creación
+                        expenseData.createdAt = serverTimestamp();
+                        await addDoc(collection(db, 'gastos_simples'), expenseData);
+                    }
                     app.backToTrip();
                 } catch (err) {
                     console.error("Firestore Error (Save Expense):", err);
@@ -1217,10 +1297,15 @@ service cloud.firestore {
                     const el = document.createElement('div');
                     el.className = 'bg-white p-3 rounded-lg shadow-sm flex justify-between items-center border-l-4 border-blue-500';
                     
-                    const deleteBtn = `
-                        <button onclick="app.promptDeleteExpense('${exp.id}')" class="ml-3 text-gray-300 hover:text-red-500 transition p-2" title="Delete expense">
-                            <i class="fa-solid fa-trash-can"></i>
-                        </button>
+                    const actionBtns = `
+                        <div class="flex items-center">
+                            <button onclick="app.editExpense('${exp.id}')" class="ml-2 text-gray-300 hover:text-blue-500 transition p-2" title="Edit expense">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            <button onclick="app.promptDeleteExpense('${exp.id}')" class="ml-1 text-gray-300 hover:text-red-500 transition p-2" title="Delete expense">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
                     `;
 
                     el.innerHTML = `
@@ -1237,7 +1322,7 @@ service cloud.firestore {
                                 <p class="text-xs text-gray-400">(${exp.amount} ${exp.currency})</p>
                                 ${exp.photoUrl ? `<a href="${exp.photoUrl}" target="_blank" class="text-xs text-blue-500 underline"><i class="fa-solid fa-paperclip"></i></a>` : ''}
                             </div>
-                            ${deleteBtn}
+                            ${actionBtns}
                         </div>`;
                     container.appendChild(el);
                 });
