@@ -981,6 +981,7 @@ service cloud.firestore {
             handleFileSelect: (input) => {
                 if (input.files && input.files[0]) {
                     const file = input.files[0];
+                    state.currentFile = file;
                     const reader = new FileReader();
                     reader.onload = (e) => {
                         // Crear imagen en memoria para comprimirla
@@ -1305,6 +1306,65 @@ service cloud.firestore {
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get('code');
         
+        // El onAuthStateChanged siempre debe registrarse
+        onAuthStateChanged(auth, (user) => {
+            if(user) {
+                state.user = user;
+                document.getElementById('login-screen').classList.add('hidden');
+                const username = user.email.split('@')[0].toUpperCase();
+                document.getElementById('connection-status').innerText = "Connected: " + username;
+                document.getElementById('user-email-display').innerText = username;
+                
+                // 1. ESCUCHAR VIAJES
+                const qTrips = query(
+                    collection(db, 'viajes_simples'), 
+                    where('userId', '==', user.uid)
+                );
+                onSnapshot(qTrips, (snapshot) => {
+                    state.allTrips = [];
+                    snapshot.forEach(doc => state.allTrips.push({id: doc.id, ...doc.data()}));
+                    app.renderDashboard();
+                }, (error) => {
+                    console.error("Firestore Error (Trips Listener):", error);
+                    if (error.code === 'permission-denied') {
+                        document.getElementById('rules-error-banner').classList.remove('hidden');
+                        document.getElementById('modal-rules-help').classList.remove('hidden');
+                    }
+                });
+
+                // 2. ESCUCHAR TODOS LOS GASTOS PARA CALCULAR TOTALES
+                const qExpenses = query(
+                    collection(db, 'gastos_simples'),
+                    where('userId', '==', user.uid)
+                );
+                onSnapshot(qExpenses, (snapshot) => {
+                    // Reiniciar totales
+                    state.tripTotals = {};
+                    
+                    snapshot.forEach(doc => {
+                        const expense = doc.data();
+                        const tripId = expense.tripId;
+                        if (!state.tripTotals[tripId]) state.tripTotals[tripId] = 0;
+                        // Sumar el total final en USD
+                        state.tripTotals[tripId] += (expense.finalUSD || 0);
+                    });
+                    
+                    // Volver a pintar el dashboard con los nuevos números
+                    app.renderDashboard();
+                }, (error) => {
+                    console.error("Firestore Error (Expenses Listener):", error);
+                    if (error.code === 'permission-denied') {
+                        document.getElementById('rules-error-banner').classList.remove('hidden');
+                        document.getElementById('modal-rules-help').classList.remove('hidden');
+                    }
+                });
+
+            } else {
+                document.getElementById('login-screen').classList.remove('hidden');
+            }
+        });
+
+        // Solo si volvemos de dropbox procesamos el token
         if (code && sessionStorage.getItem('dbx_auth_pending')) {
             sessionStorage.removeItem('dbx_auth_pending');
             // Clean up the URL right away to prevent infinite loops
@@ -1321,6 +1381,8 @@ service cloud.firestore {
                         state.dropboxRefreshToken = refreshToken;
                         state.dropboxAccessToken = response.result.access_token;
                         state.dropboxExpiresAt = Date.now() + (response.result.expires_in * 1000) - 60000;
+                        
+                        // Mostramos notificación de exito
                         alert("✅ Dropbox connected successfully!");
                     } else {
                         alert("⚠️ Dropbox did not return a permanent token.");
@@ -1332,67 +1394,9 @@ service cloud.firestore {
                 })
                 .finally(() => {
                     app.hideLoader();
-                    // Ensure the login screen shows up so the user can enter their data again.
-                    document.getElementById('login-screen').classList.remove('hidden');
+                    // Importante: No forzamos mostrar el login-screen,
+                    // Dejamos que Firebase OnAuthStateChanged lo maneje (ocultarlo o mostrarlo)
                 });
-        } else {
-            // NORMAL FLOW
-            onAuthStateChanged(auth, (user) => {
-                if(user) {
-                    state.user = user;
-                    document.getElementById('login-screen').classList.add('hidden');
-                    const username = user.email.split('@')[0].toUpperCase();
-                    document.getElementById('connection-status').innerText = "Connected: " + username;
-                    document.getElementById('user-email-display').innerText = username;
-                    
-                    // 1. ESCUCHAR VIAJES
-                    const qTrips = query(
-                        collection(db, 'viajes_simples'), 
-                        where('userId', '==', user.uid)
-                    );
-                    onSnapshot(qTrips, (snapshot) => {
-                        state.allTrips = [];
-                        snapshot.forEach(doc => state.allTrips.push({id: doc.id, ...doc.data()}));
-                        app.renderDashboard();
-                    }, (error) => {
-                        console.error("Firestore Error (Trips Listener):", error);
-                        if (error.code === 'permission-denied') {
-                            document.getElementById('rules-error-banner').classList.remove('hidden');
-                            document.getElementById('modal-rules-help').classList.remove('hidden');
-                        }
-                    });
-
-                    // 2. ESCUCHAR TODOS LOS GASTOS PARA CALCULAR TOTALES
-                    const qExpenses = query(
-                        collection(db, 'gastos_simples'),
-                        where('userId', '==', user.uid)
-                    );
-                    onSnapshot(qExpenses, (snapshot) => {
-                        // Reiniciar totales
-                        state.tripTotals = {};
-                        
-                        snapshot.forEach(doc => {
-                            const expense = doc.data();
-                            const tripId = expense.tripId;
-                            if (!state.tripTotals[tripId]) state.tripTotals[tripId] = 0;
-                            // Sumar el total final en USD
-                            state.tripTotals[tripId] += (expense.finalUSD || 0);
-                        });
-                        
-                        // Volver a pintar el dashboard con los nuevos números
-                        app.renderDashboard();
-                    }, (error) => {
-                        console.error("Firestore Error (Expenses Listener):", error);
-                        if (error.code === 'permission-denied') {
-                            document.getElementById('rules-error-banner').classList.remove('hidden');
-                            document.getElementById('modal-rules-help').classList.remove('hidden');
-                        }
-                    });
-
-                } else {
-                    document.getElementById('login-screen').classList.remove('hidden');
-                }
-            });
         }
     </script>
 </body>
